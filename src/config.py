@@ -33,7 +33,7 @@ I2C_FREQ = 400000
 # }
 
 DISPLAY_ADDREESSES = {
-    "hour_min": 0x70
+    "hour_minute": 0x70
 }
 
 ## Overclocking - Pico1 default 133MHz, Pico2 default 150MHz

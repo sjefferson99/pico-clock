@@ -4,6 +4,7 @@ from lib.ht16k33.ht16k33segment import HT16K33Segment
 from config import DISPLAY_ADDREESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
 from machine import freq, I2C, RTC
 from asyncio import sleep_ms, create_task, get_event_loop
+from time import sleep
 
 class Clock:
     
@@ -20,18 +21,23 @@ class Clock:
         self.wifi = WirelessNetwork()
         self.rtc = RTC()
 
-    def startup(self) -> None: # TODO: check this code is correct
+    def startup(self) -> None:
         self.log.info("Starting Clock")
 
         self.wifi.startup()
 
-        # self.displays = {}
-        # for name, address in DISPLAY_ADDREESSES.items():
-        #     self.displays[name] = HT16K33Segment(self.i2c, i2c_address=address)
-        #     self.displays[name].set_brightness(8)
-        #     self.displays[name].clear()
-        #     self.displays[name].write_display()
-        # self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
+        self.displays = {}
+        for name, address in DISPLAY_ADDREESSES.items():
+            self.displays[name] = HT16K33Segment(self.i2c, i2c_address=address)
+            self.displays[name].set_brightness(15)
+            self.displays[name].set_blink_rate(0)
+            self.displays[name].set_colon(False)
+            self.displays[name].clear()
+            self.displays[name].draw()
+            self.log.info(f"Initialized display '{name}' at address 0x{address:02X}")
+            self.display_test(name)
+        
+        self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
 
         self.log.info("Starting clock loop")
         create_task(self.async_clock_loop())
@@ -39,6 +45,30 @@ class Clock:
         loop = get_event_loop()
         loop.run_forever()
 
+    def display_test(self, display: str) -> None:
+        """
+        Run a display test on a given display.
+        """
+        try:
+            if display in self.displays:
+                self.log.info(f"Running display test on {display}")
+
+                colon_dot = False
+
+                for output in '0123456789ABCDEF':
+                    for i in range(4):
+                        self.displays[display].set_character(output, i, colon_dot)
+                        sleep(0.02)
+                    colon_dot = not colon_dot
+                    self.displays[display].set_colon(colon_dot)
+                    self.displays[display].draw()
+            else:
+                self.log.error(f"Display {display} not found for test")
+        
+        except Exception as e:
+            self.log.error(f"Error during display test on {display}: {e}")
+
+    
     async def async_clock_loop(self) -> None:
         """
         Main clock loop to update time and date displays.
@@ -52,10 +82,13 @@ class Clock:
                 hour, minute, second = self.rtc.datetime()[4:7]
                 time_string = f"{hour:02d}{minute:02d}{second:02d}"
                 self.log.info(f"Updating display to: {time_string}")
+                for i in range(4):
+                    self.displays["hour_minute"].set_character(time_string[i], i)
                 self.render_seconds_colon(int(second))
+                self.displays["hour_minute"].draw()
                 self.last_time = self.rtc.datetime()
 
-            await sleep_ms(1)  # Implementation of the clock loop goes here
+            await sleep_ms(1)
     
     def render_seconds_colon(self, seconds: int) -> None:
         """
@@ -65,7 +98,7 @@ class Clock:
 
         if seconds % 2 == 1:
             self.log.info("Hiding seconds colon")
-            # TODO render seconds colon on display
+            self.displays["hour_minute"].set_colon(False)
         else:
             self.log.info("Showing seconds colon")
-            # TODO render seconds colon on display
+            self.displays["hour_minute"].set_colon(True)
