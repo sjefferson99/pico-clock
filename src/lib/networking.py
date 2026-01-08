@@ -45,6 +45,12 @@ class WirelessNetwork:
         self.gateway = "Unknown"
         self.dns = "Unknown"
         self.ntp_last_synced_timestamp = 0
+        
+        if config.NTP_SYNC_INTERVAL_SECONDS < 60:
+            self.log.warn("NTP sync interval too low, setting to minimum of 60 seconds")
+            self.NTP_SYNC_INTERVAL_SECONDS = 60
+        else:
+            self.NTP_SYNC_INTERVAL_SECONDS = config.NTP_SYNC_INTERVAL_SECONDS
 
         self.configure_wifi()
 
@@ -188,8 +194,8 @@ class WirelessNetwork:
 
         if self.get_status() == 3:
             self.log.info("Connected to wireless network")
-            if self.ntp_last_synced_timestamp == 0 or (time() - self.ntp_last_synced_timestamp) > config.NTP_SYNC_INTERVAL_SECONDS:
-                self.log.info(f"Syncing RTC from NTP as it has not been synced in {config.NTP_SYNC_INTERVAL_SECONDS} seconds.")
+            if self.ntp_last_synced_timestamp == 0 or (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
+                self.log.info(f"Syncing RTC from NTP as it has not been synced in {self.NTP_SYNC_INTERVAL_SECONDS} seconds.")
                 await self.async_sync_rtc_from_ntp()
             return True
         else:
