@@ -1,7 +1,7 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 
-from config import DISPLAY_ADDREESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
 from machine import freq, I2C, RTC
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
@@ -41,10 +41,10 @@ class Clock:
         """
         Initialize all connected displays into a list of available displays.
         """
-        for name, address in DISPLAY_ADDREESSES.items():
+        for name, address in DISPLAY_ADDRESSES.items():
             self.log.info(f"Initializing display '{name}' at address 0x{address:02X}")
             try:
-                self.displays[name]= Display(self.i2c, name, address, self.tests_running)
+                self.displays[name] = Display(self.i2c, name, address, self.tests_running)
             
             except Exception as e:
                 self.log.error(f"Failed to initialize display '{name}' at address 0x{address:02X}: {e}")

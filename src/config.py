@@ -25,7 +25,7 @@ SCL_PIN = 1
 I2C_ID = 0
 I2C_FREQ = 400000
 
-DISPLAY_ADDREESSES = {
+DISPLAY_ADDRESSES = {
     "hour_minute": 0x70,
     "status": 0x71,
     "seconds": 0x72,
