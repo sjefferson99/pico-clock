@@ -28,14 +28,19 @@ class Clock:
 
         self.displays = {}
         for name, address in DISPLAY_ADDREESSES.items():
-            self.displays[name] = HT16K33Segment(self.i2c, i2c_address=address)
-            self.displays[name].set_brightness(15)
-            self.displays[name].set_blink_rate(0)
-            self.displays[name].set_colon(False)
-            self.displays[name].clear()
-            self.displays[name].draw()
-            self.log.info(f"Initialized display '{name}' at address 0x{address:02X}")
-            self.display_test(name)
+            try:
+                self.displays[name] = HT16K33Segment(self.i2c, i2c_address=address)
+                self.displays[name].set_brightness(15)
+                self.displays[name].set_blink_rate(0)
+                self.displays[name].set_colon(False)
+                self.displays[name].clear()
+                self.displays[name].draw()
+                self.log.info(f"Initialized display '{name}' at address 0x{address:02X}")
+                self.display_test(name)
+
+            except Exception as e:
+                self.log.error(f"Failed to initialize display '{name}' at address 0x{address:02X}: {e}")
+                continue
         
         self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
 
@@ -67,7 +72,6 @@ class Clock:
         
         except Exception as e:
             self.log.error(f"Error during display test on {display}: {e}")
-
     
     async def async_clock_loop(self) -> None:
         """
