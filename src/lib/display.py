@@ -1,6 +1,7 @@
 from lib.ht16k33.ht16k33segment import HT16K33Segment
 from lib.ulogging import uLogger
 from asyncio import sleep_ms
+from config import DISPLAY_BRIGHTNESS
 
 try:
     from typing import TYPE_CHECKING
