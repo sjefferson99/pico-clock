@@ -14,9 +14,10 @@ WIFI_CONNECT_TIMEOUT_SECONDS = 10
 WIFI_CONNECT_RETRIES = 1
 WIFI_RETRY_BACKOFF_SECONDS = 5
 # Leave as none for MAC based unique hostname or specify a custom hostname string
-CUSTOM_HOSTNAME = None
+CUSTOM_HOSTNAME = "Pico-Clock"
 
-NTP_SYNC_INTERVAL_SECONDS = 86400
+## NTP poll frequency - Minimum period is every 60 seconds to avoid NTP server blacklisting
+NTP_SYNC_INTERVAL_SECONDS = 60
 
 ## I2C
 SDA_PIN = 0
@@ -24,16 +25,12 @@ SCL_PIN = 1
 I2C_ID = 0
 I2C_FREQ = 400000
 
-# DISPLAY_ADDREESSES = {
-#     "hour_min": 0x70,
-#     "seconds": 0x71,
-#     "day_month": 0x72,
-#     "year": 0x73,
-#     "unused": 0x74
-# }
-
-DISPLAY_ADDREESSES = {
-    "hour_minute": 0x70
+DISPLAY_ADDRESSES = {
+    "hour_minute": 0x70,
+    "status": 0x71,
+    "seconds": 0x72,
+    "day_month": 0x73,
+    "year": 0x74
 }
 
 ## Overclocking - Pico1 default 133MHz, Pico2 default 150MHz

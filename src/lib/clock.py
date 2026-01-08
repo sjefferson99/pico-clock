@@ -1,10 +1,10 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
-from lib.ht16k33.ht16k33segment import HT16K33Segment
-from config import DISPLAY_ADDREESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
+
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
 from machine import freq, I2C, RTC
 from asyncio import sleep_ms, create_task, get_event_loop
-from time import sleep
+from lib.display import Display
 
 class Clock:
     
@@ -20,54 +20,56 @@ class Clock:
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.wifi = WirelessNetwork()
         self.rtc = RTC()
+        self.displays = {}
+        self.tests_running = []
 
     def startup(self) -> None:
-        self.log.info("Starting Clock")
-
+        self.log.info("Starting Pico Clock")
         self.wifi.startup()
+        self.init_displays()
 
-        self.displays = {}
-        for name, address in DISPLAY_ADDREESSES.items():
-            self.displays[name] = HT16K33Segment(self.i2c, i2c_address=address)
-            self.displays[name].set_brightness(15)
-            self.displays[name].set_blink_rate(0)
-            self.displays[name].set_colon(False)
-            self.displays[name].clear()
-            self.displays[name].draw()
-            self.log.info(f"Initialized display '{name}' at address 0x{address:02X}")
-            self.display_test(name)
-        
-        self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
+        self.test_all_displays()
 
         self.log.info("Starting clock loop")
         create_task(self.async_clock_loop())
+        self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
 
         loop = get_event_loop()
         loop.run_forever()
 
-    def display_test(self, display: str) -> None:
+    def init_displays(self) -> None:
         """
-        Run a display test on a given display.
+        Initialize all connected displays into a list of available displays.
         """
-        try:
-            if display in self.displays:
-                self.log.info(f"Running display test on {display}")
+        for name, address in DISPLAY_ADDRESSES.items():
+            self.log.info(f"Initializing display '{name}' at address 0x{address:02X}")
+            try:
+                self.displays[name] = Display(self.i2c, name, address, self.tests_running)
+            
+            except Exception as e:
+                self.log.error(f"Failed to initialize display '{name}' at address 0x{address:02X}: {e}")
 
-                colon_dot = False
+        self.log.info(f"Initialized {len(self.displays)} displays: " + ", ".join(self.displays.keys()))
+    
+    def test_all_displays(self) -> None:
+        """
+        Run display tests on all initialized displays.
+        """
+        self.log.info("Starting display tests for all displays")
+        for name, display in self.displays.items():
+            self.log.info(f"Testing display '{name}'")
+            create_task(display.async_display_test())
+    
+    def clock_loop_should_run(self) -> bool:
+        """
+        Determine if the clock loop should run.
+        """
+        result = True
 
-                for output in '0123456789ABCDEF':
-                    for i in range(4):
-                        self.displays[display].set_character(output, i, colon_dot)
-                        sleep(0.02)
-                    colon_dot = not colon_dot
-                    self.displays[display].set_colon(colon_dot)
-                    self.displays[display].draw()
-            else:
-                self.log.error(f"Display {display} not found for test")
+        if len(self.tests_running) > 0:
+            result = False
         
-        except Exception as e:
-            self.log.error(f"Error during display test on {display}: {e}")
-
+        return result
     
     async def async_clock_loop(self) -> None:
         """
@@ -75,8 +77,13 @@ class Clock:
         """
         self.log.info("Entering clock loop")
         self.last_time = self.rtc.datetime()
+
         while True:
             
+            if not self.clock_loop_should_run():
+                await sleep_ms(100)
+                continue
+
             if self.rtc.datetime() != self.last_time:
                 self.log.info(f"Time now is {self.rtc.datetime()}")
                 hour, minute, second = self.rtc.datetime()[4:7]

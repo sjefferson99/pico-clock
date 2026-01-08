@@ -15,6 +15,7 @@ class WirelessNetwork:
 
     def __init__(self) -> None:
         self.log = uLogger("WIFI")
+        self.log.info("Initializing Wireless Network")
         self.status_led = StatusLED()
         self.wifi_ssid = config.WIFI_SSID
         self.wifi_password = config.WIFI_PASSWORD
@@ -60,7 +61,6 @@ class WirelessNetwork:
         self.wlan.config(pm=self.disable_power_management)
         self.mac = self.get_mac_address()
         self.mac_no_colons = self.mac.replace(":", "")
-        self.log.info("MAC: " + self.mac)
         self.hostname = self.determine_hostname()
         network.hostname(self.hostname)
 
