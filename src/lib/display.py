@@ -1,6 +1,7 @@
 from lib.ht16k33.ht16k33segment import HT16K33Segment
 from lib.ulogging import uLogger
 from asyncio import sleep_ms
+from config import DISPLAY_BRIGHTNESS
 
 try:
     from typing import TYPE_CHECKING
@@ -29,7 +30,7 @@ class Display(HT16K33Segment):
         super().__init__(i2c, i2c_address=address)
         self.log = uLogger(f"Init display-0x{address:02X}: {name}")
         self.name = name
-        self.set_brightness(15)
+        self.set_brightness(DISPLAY_BRIGHTNESS)
         self.set_blink_rate(0)
         self.set_colon(False)
         self.clear()

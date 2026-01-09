@@ -33,5 +33,8 @@ DISPLAY_ADDRESSES = {
     "year": 0x74
 }
 
+# Display brightness for HT16K33 displays: valid range 0 (dim/off) to 15 (maximum)
+DISPLAY_BRIGHTNESS = 15
+
 ## Overclocking - Pico1 default 133MHz, Pico2 default 150MHz
 CLOCK_FREQUENCY = 133000000
