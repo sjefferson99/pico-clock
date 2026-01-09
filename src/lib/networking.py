@@ -13,7 +13,7 @@ import struct
 
 class WirelessNetwork:
 
-    def __init__(self) -> None:
+    def __init__(self, time_sync_status: list) -> None:
         self.log = uLogger("WIFI")
         self.log.info("Initializing Wireless Network")
         self.status_led = StatusLED()
@@ -23,6 +23,7 @@ class WirelessNetwork:
         rp2.country(self.wifi_country)
         self.disable_power_management = 0xa11140
         self.led_retry_backoff_frequency = 4
+        self.time_sync_status = time_sync_status
         
         # Reference: https://datasheets.raspberrypi.com/picow/connecting-to-the-internet-with-pico-w.pdf
         self.CYW43_LINK_DOWN = 0
@@ -196,6 +197,7 @@ class WirelessNetwork:
             self.log.info("Connected to wireless network")
             if self.ntp_last_synced_timestamp == 0 or (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
                 self.log.info(f"Syncing RTC from NTP as it has not been synced in {self.NTP_SYNC_INTERVAL_SECONDS} seconds.")
+                self.set_time_sync_status("NTP", False)
                 await self.async_sync_rtc_from_ntp()
             return True
         else:
@@ -275,9 +277,19 @@ class WirelessNetwork:
                 timestamp[3], timestamp[4], timestamp[5], 0))
             self.ntp_last_synced_timestamp = time()
             self.log.info("RTC synced from NTP")
+            self.set_time_sync_status("NTP", True)
+            self.set_time_sync_status("PRTC", True)
         except Exception as e:
             self.log.error(f"Failed to sync RTC from NTP: {e}")
         return timestamp
     
     def is_connected(self) -> bool:
         return self.get_status() == 3
+    
+    def set_time_sync_status(self, method_name: str, status: bool) -> None:
+        for method in self.time_sync_status:
+            if method["name"] == method_name:
+                method["status"] = status
+                self.log.info(f"Time sync status updated: {method_name} set to {status}")
+                return
+        self.log.warn(f"Time sync method '{method_name}' not found in status list")

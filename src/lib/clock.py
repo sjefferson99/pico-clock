@@ -18,10 +18,11 @@ class Clock:
         self.log.info("Setting CPU frequency to: " + str(CLOCK_FREQUENCY / 1000000) + "MHz")
         freq(CLOCK_FREQUENCY)
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
-        self.wifi = WirelessNetwork()
+        self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "RTC", "status": False}, {"name": "NTP", "status": False}, {"name": "PRTC", "status": False}]
+        self.wifi = WirelessNetwork(self.time_sync_status)
         self.rtc = RTC()
         self.displays = {}
-        self.tests_running = []
+        self.tests_running = []        
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -33,6 +34,8 @@ class Clock:
         self.log.info("Starting clock loop")
         create_task(self.async_clock_loop())
         self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
+
+        create_task(self.async_check_time_sync_status())
 
         loop = get_event_loop()
         loop.run_forever()
@@ -109,3 +112,35 @@ class Clock:
         else:
             self.log.info("Showing seconds colon")
             self.displays["hour_minute"].set_colon(True)
+
+    async def async_check_time_sync_status(self) -> None:
+        """
+        Check if the RTC has been synchronized with NTP.
+        """
+        self.log.info("Starting time sync status checker")
+        
+        if self.displays.get("status") is None:
+            self.log.warn("No status display found, skipping time sync status checker")
+            return
+
+        while True:
+
+            if not self.clock_loop_should_run():
+                await sleep_ms(100)
+                continue
+
+            current_method = False
+            for method in self.time_sync_status:
+                
+                if method["status"]:
+                    current_method = method["name"]
+                    break
+
+            if current_method:
+                self.log.info(f"Time synchronized via {current_method}")
+                self.displays["status"].print_text(current_method)
+            else:
+                self.log.info("No time synchronisation method active")
+                self.displays["status"].print_text("NON")
+
+            await sleep_ms(1000)
