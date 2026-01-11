@@ -98,6 +98,7 @@ class Display(HT16K33Segment):
     def print_text(self, text: str) -> None:
         """
         Print text to the display.
+        The display can show up to 4 characters; excess characters are ignored.
         
         :param text: Text to display
         :type text: str
@@ -111,6 +112,8 @@ class Display(HT16K33Segment):
     def print_character(self, char: str, position: int) -> None:
         """
         Print a single character at a specified position on the display.
+        Current supported characters are 0-9, A-F and custom glyphs G, N, O, P, R, S, T.
+        Unsupported characters are rendered as blank.
         
         :param char: Character to display
         :type char: str
@@ -123,11 +126,6 @@ class Display(HT16K33Segment):
             if char in self.glyphs:
                 self.set_glyph(self.glyphs[char], position)
             else:
-                # Unsupported character: log a warning and render as blank
                 if hasattr(self, "log") and self.log is not None:
-                    self.log.warning(
-                        "Unsupported character %r at position %d; displaying blank.",
-                        char,
-                        position,
-                    )
+                    self.log.warn(f"Unsupported character {char} at position {position}; displaying blank.")
                 self.set_glyph(0x00, position)

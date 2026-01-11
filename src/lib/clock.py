@@ -138,7 +138,7 @@ class Clock:
                     break
 
             if current_method:
-                self.log.info(f"Time synchronized via {current_method}")
+                self.log.info(f"Time synchronised via {current_method}")
                 self.displays["status"].print_text(current_method)
             else:
                 self.log.info("No time synchronisation method active")
