@@ -195,17 +195,30 @@ class WirelessNetwork:
 
         if self.get_status() == 3:
             self.log.info("Connected to wireless network")
-            if self.ntp_last_synced_timestamp == 0 or (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
+            if self.check_ntp_sync_needed():
                 self.log.info(f"Syncing RTC from NTP as it has not been synced in {self.NTP_SYNC_INTERVAL_SECONDS} seconds.")
-                self.set_time_sync_status("NTP", False)
                 await self.async_sync_rtc_from_ntp()
             return True
         else:
             self.log.warn("Unable to connect to wireless network")
             return False
-        
+
+    def check_ntp_sync_needed(self) -> bool:
+        if self.ntp_last_synced_timestamp == 0:
+            self.set_time_sync_status("NTP", False)
+            self.log.info("NTP sync needed: never synced before")
+            return True
+        elif (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
+            self.set_time_sync_status("NTP", False)
+            self.log.info("NTP sync needed: interval exceeded")
+            return True
+        else:
+            self.log.info("NTP sync not needed")
+            return False
+
     async def network_monitor(self) -> None:
         while True:
+            self.check_ntp_sync_needed()
             await self.check_network_access()
             await sleep(5)
     
