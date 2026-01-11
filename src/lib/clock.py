@@ -19,7 +19,7 @@ class Clock:
         freq(CLOCK_FREQUENCY)
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "RTC", "status": False}, {"name": "NTP", "status": False}, {"name": "PRTC", "status": False}]
-        self.wifi = WirelessNetwork(self.time_sync_status)
+        self.wifi = WirelessNetwork()
         self.rtc = RTC()
         self.displays = {}
         self.tests_running = []        
@@ -130,18 +130,50 @@ class Clock:
                 await sleep_ms(100)
                 continue
 
-            current_method = ""
-            for method in self.time_sync_status:
-                
-                if method["status"]:
-                    current_method = method["name"]
-                    break
+            ntp_status = self.wifi.get_ntp_sync_status()
+            self.set_time_sync_status("NTP", ntp_status)
+            prtc_status = self.wifi.get_prtc_sync_status()
+            self.set_time_sync_status("PRTC", prtc_status)
 
-            if current_method:
-                self.log.info(f"Time synchronised via {current_method}")
-                self.displays["status"].print_text(current_method)
-            else:
-                self.log.info("No time synchronisation method active")
-                self.displays["status"].print_text("NONE")
+            self.set_status_display()
 
             await sleep_ms(5000)
+
+    def set_status_display(self) -> None:
+        """
+        Update the status display with the current time synchronization method.
+        """
+        current_method = ""
+        for method in self.time_sync_status:
+            
+            if method["status"]:
+                current_method = method["name"]
+                break
+
+        if current_method:
+            self.log.info(f"Time synchronised via {current_method}, updating status display")
+            self.displays["status"].print_text(current_method)
+        else:
+            self.log.info("No time synchronisation method active, updating status display to NONE")
+            self.displays["status"].print_text("NONE")
+    
+    def set_time_sync_status(self, method_name: str, status: bool) -> None:
+        """
+        Update the status of a time synchronization method.
+
+        This method updates the `status` field of the entry in `self.time_sync_status`
+        whose `name` matches the given `method_name`. It is used to record whether a
+        specific time sync mechanism (for example, "NTP" or "PRTC") is currently
+        considered active or has successfully synchronized the system time.
+
+        :param method_name: Name of the time sync method to update (must match an
+                            existing entry in `self.time_sync_status`).
+        :param status: Boolean flag indicating the new status for the method (True if
+                       the method is available/has succeeded, False otherwise).
+        """
+        for method in self.time_sync_status:
+            if method["name"] == method_name:
+                method["status"] = status
+                self.log.info(f"Time sync status updated: {method_name} set to {status}")
+                return
+        self.log.warn(f"Time sync method '{method_name}' not found in status list")
