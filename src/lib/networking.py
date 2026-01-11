@@ -204,6 +204,23 @@ class WirelessNetwork:
             return False
 
     def check_ntp_sync_needed(self) -> bool:
+        """
+        Determine whether an NTP time synchronisation should be performed.
+
+        This inspects ``ntp_last_synced_timestamp`` and
+        ``NTP_SYNC_INTERVAL_SECONDS`` to decide if an NTP sync is due. When a
+        sync is required, it updates the internal time sync status by calling
+        :meth:`set_time_sync_status` with ``("NTP", False)`` so that other
+        components know that the RTC is currently considered out of sync.
+
+        This method is typically called from :meth:`check_network_access` and
+        :meth:`network_monitor` before attempting to synchronise the RTC from
+        an NTP server.
+
+        Returns:
+            bool: ``True`` if an NTP sync should be triggered, ``False``
+            otherwise.
+        """
         if self.ntp_last_synced_timestamp == 0:
             self.set_time_sync_status("NTP", False)
             self.log.info("NTP sync needed: never synced before")
@@ -300,6 +317,19 @@ class WirelessNetwork:
         return self.get_status() == 3
     
     def set_time_sync_status(self, method_name: str, status: bool) -> None:
+        """
+        Update the status of a time synchronization method.
+
+        This method updates the `status` field of the entry in `self.time_sync_status`
+        whose `name` matches the given `method_name`. It is used to record whether a
+        specific time sync mechanism (for example, "NTP" or "PRTC") is currently
+        considered active or has successfully synchronized the system time.
+
+        :param method_name: Name of the time sync method to update (must match an
+                            existing entry in `self.time_sync_status`).
+        :param status: Boolean flag indicating the new status for the method (True if
+                       the method is available/has succeeded, False otherwise).
+        """
         for method in self.time_sync_status:
             if method["name"] == method_name:
                 method["status"] = status

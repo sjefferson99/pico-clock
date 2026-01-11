@@ -120,4 +120,14 @@ class Display(HT16K33Segment):
         if char in '0123456789ABCDEF':
             self.set_character(char, position)
         else:
-            self.set_glyph(self.glyphs.get(char, 0x00), position)
+            if char in self.glyphs:
+                self.set_glyph(self.glyphs[char], position)
+            else:
+                # Unsupported character: log a warning and render as blank
+                if hasattr(self, "log") and self.log is not None:
+                    self.log.warning(
+                        "Unsupported character %r at position %d; displaying blank.",
+                        char,
+                        position,
+                    )
+                self.set_glyph(0x00, position)

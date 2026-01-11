@@ -115,7 +115,8 @@ class Clock:
 
     async def async_check_time_sync_status(self) -> None:
         """
-        Check if the RTC has been synchronized with NTP.
+        Monitor and display the current time synchronization source
+        (for example, GPS, RTC, NTP, or PRTC) on the status display.
         """
         self.log.info("Starting time sync status checker")
         
@@ -129,7 +130,7 @@ class Clock:
                 await sleep_ms(100)
                 continue
 
-            current_method = False
+            current_method = ""
             for method in self.time_sync_status:
                 
                 if method["status"]:
@@ -141,6 +142,6 @@ class Clock:
                 self.displays["status"].print_text(current_method)
             else:
                 self.log.info("No time synchronisation method active")
-                self.displays["status"].print_text("NON")
+                self.displays["status"].print_text("NONE")
 
-            await sleep_ms(1000)
+            await sleep_ms(5000)
