@@ -120,6 +120,7 @@ class Display(HT16K33Segment):
         :param position: Position on the display (0-3)
         :type position: int
         """
+        char = char.upper()
         if char in '0123456789ABCDEF':
             self.set_character(char, position)
         else:
