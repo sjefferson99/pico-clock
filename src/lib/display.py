@@ -36,7 +36,30 @@ class Display(HT16K33Segment):
         self.clear()
         self.draw()
         self.tests_running = tests_running
+        self.load_glyphs()
 
+    def load_glyphs(self) -> None:
+        """
+        Load custom glyphs for the display.
+                0
+                _
+            5 |   | 1
+              |   |
+                - <----- 6
+            4 |   | 2
+              | _ |
+                3
+        """
+        self.glyphs = {
+            'G': 0b00111101,
+            'N': 0b00110111,
+            'O': 0b00111111,
+            'P': 0b01110011,
+            'R': 0b00110001,
+            'S': 0b01101101,
+            'T': 0b01111000            
+        }
+    
     async def async_display_test(self) -> None:
         """
         Run a display test on a given display.
@@ -71,3 +94,38 @@ class Display(HT16K33Segment):
         :rtype: str
         """
         return self.name
+
+    def print_text(self, text: str) -> None:
+        """
+        Print text to the display.
+        The display can show up to 4 characters; excess characters are ignored.
+        
+        :param text: Text to display
+        :type text: str
+        """
+        text = str(text)
+        self.clear()
+        for i in range(min(4, len(text))):
+            self.print_character(text[i], i)
+        self.draw()
+
+    def print_character(self, char: str, position: int) -> None:
+        """
+        Print a single character at a specified position on the display.
+        Current supported characters are 0-9, A-F and custom glyphs G, N, O, P, R, S, T.
+        Unsupported characters are rendered as blank.
+        
+        :param char: Character to display
+        :type char: str
+        :param position: Position on the display (0-3)
+        :type position: int
+        """
+        if char in '0123456789ABCDEF':
+            self.set_character(char, position)
+        else:
+            if char in self.glyphs:
+                self.set_glyph(self.glyphs[char], position)
+            else:
+                if hasattr(self, "log") and self.log is not None:
+                    self.log.warn(f"Unsupported character {char} at position {position}; displaying blank.")
+                self.set_glyph(0x00, position)

@@ -46,6 +46,9 @@ class WirelessNetwork:
         self.gateway = "Unknown"
         self.dns = "Unknown"
         self.ntp_last_synced_timestamp = 0
+        self.ntp_sync_status = False
+        self.prtc_sync_status = False
+        self.network_check_in_progress = False
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
             self.log.warn("NTP sync interval too low, setting to minimum of 60 seconds")
@@ -178,33 +181,67 @@ class WirelessNetwork:
         await self.status_led.async_flash((config.WIFI_RETRY_BACKOFF_SECONDS * self.led_retry_backoff_frequency), self.led_retry_backoff_frequency)
 
     async def check_network_access(self) -> bool:
-        self.log.info("Checking for network access")
-        retries = 0
-        while self.get_status() != 3 and retries <= config.WIFI_CONNECT_RETRIES:
-            try:
-                await self.connect_wifi()
-                return True
-            except ValueError as ve:
-                self.log.error(f"Auth error, will not retry, please check credentials in the config file : {ve}")
-                raise ValueError(ve)
-            except Exception as e:
-                self.log.warn(f"Error connecting to wifi on attempt {retries + 1} of {config.WIFI_CONNECT_RETRIES + 1}: {e}")
-                retries += 1
-                await self.network_retry_backoff()
+        if self.network_check_in_progress:
+            self.log.info("Network access check already in progress, skipping")
+            return False
+        self.network_check_in_progress = True
+        try:
+            self.log.info("Checking for network access")
+            retries = 0
+            while self.get_status() != 3 and retries <= config.WIFI_CONNECT_RETRIES:
+                try:
+                    await self.connect_wifi()
+                    return True
+                except ValueError as ve:
+                    self.log.error(f"Auth error, will not retry, please check credentials in the config file : {ve}")
+                    raise ValueError(ve)
+                except Exception as e:
+                    self.log.warn(f"Error connecting to wifi on attempt {retries + 1} of {config.WIFI_CONNECT_RETRIES + 1}: {e}")
+                    retries += 1
+                    if retries > config.WIFI_CONNECT_RETRIES:
+                        self.log.error("Exceeded maximum wifi connection retries")
+                        break
+                    await self.network_retry_backoff()
 
-        if self.get_status() == 3:
-            self.log.info("Connected to wireless network")
-            if self.ntp_last_synced_timestamp == 0 or (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
-                self.log.info(f"Syncing RTC from NTP as it has not been synced in {self.NTP_SYNC_INTERVAL_SECONDS} seconds.")
-                await self.async_sync_rtc_from_ntp()
+            if self.get_status() == 3:
+                self.log.info("Connected to wireless network")
+                return True
+            else:
+                self.log.warn("Unable to connect to wireless network")
+                return False
+        finally:
+            self.network_check_in_progress = False
+
+    def check_ntp_sync_needed(self) -> bool:
+        """
+        Determine whether an NTP time synchronisation should be performed.
+
+        This inspects ``ntp_last_synced_timestamp`` and
+        ``NTP_SYNC_INTERVAL_SECONDS`` to decide if an NTP sync is due.
+
+        Returns:
+            bool: ``True`` if an NTP sync should be triggered, ``False``
+            otherwise.
+        """
+        if self.ntp_last_synced_timestamp == 0:
+            self.log.info("NTP sync needed: never synced before")
+            return True
+        elif (time() - self.ntp_last_synced_timestamp) > self.NTP_SYNC_INTERVAL_SECONDS:
+            self.log.info(f"NTP sync needed: interval {self.NTP_SYNC_INTERVAL_SECONDS} exceeded")
             return True
         else:
-            self.log.warn("Unable to connect to wireless network")
+            self.log.info("NTP sync not needed")
             return False
-        
+
     async def network_monitor(self) -> None:
+        self.log.info("Starting network monitor")
         while True:
-            await self.check_network_access()
+            if self.check_ntp_sync_needed():
+                self.log.info("Performing NTP sync from network monitor")
+                await self.async_sync_rtc_from_ntp()
+            else:
+                self.log.info("NTP in sync, now ensuring network access")
+                await self.check_network_access()
             await sleep(5)
     
     def get_mac(self) -> str:
@@ -267,17 +304,47 @@ class WirelessNetwork:
 
         return timestamp
 
-    async def async_sync_rtc_from_ntp(self) -> tuple:
+    async def async_sync_rtc_from_ntp(self) -> bool:
         try:
-            timestamp = await self.async_get_timestamp_from_ntp()
-            RTC().datetime((
-                timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
-                timestamp[3], timestamp[4], timestamp[5], 0))
-            self.ntp_last_synced_timestamp = time()
-            self.log.info("RTC synced from NTP")
+            if await self.check_network_access():
+                timestamp = await self.async_get_timestamp_from_ntp()
+                RTC().datetime((
+                    timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
+                    timestamp[3], timestamp[4], timestamp[5], 0))
+                self.ntp_last_synced_timestamp = time()
+                self.ntp_sync_status = True
+                self.prtc_sync_status = True
+                self.log.info("RTC synced from NTP")
+                result = True
+            else:
+                self.ntp_sync_status = False
+                self.log.error("No network access, cannot sync RTC from NTP")
+                result = False
         except Exception as e:
+            self.ntp_sync_status = False
             self.log.error(f"Failed to sync RTC from NTP: {e}")
-        return timestamp
+        return result
     
     def is_connected(self) -> bool:
+        """
+        Determines of the wifi connection is connected and has an IP address.
+        Returns:
+            bool: True if connected with IP, False otherwise.
+        """
         return self.get_status() == 3
+
+    def get_ntp_sync_status(self) -> bool:
+        """
+        Returns the current NTP sync status.
+        Returns:
+            bool: True if last NTP sync was successful, False otherwise.
+        """        
+        return self.ntp_sync_status
+    
+    def get_prtc_sync_status(self) -> bool:
+        """
+        Returns the current PRTC sync status.
+        Returns:
+            bool: True if last PRTC sync was successful, False otherwise.
+        """
+        return self.prtc_sync_status
