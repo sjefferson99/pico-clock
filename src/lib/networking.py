@@ -181,6 +181,13 @@ class WirelessNetwork:
         await self.status_led.async_flash((config.WIFI_RETRY_BACKOFF_SECONDS * self.led_retry_backoff_frequency), self.led_retry_backoff_frequency)
 
     async def check_network_access(self) -> bool:
+        """
+        Check and ensure network access by attempting to connect to the wifi network.
+        Implements retry logic based on configuration settings.
+        Returns:
+            bool: True if network access is established, False otherwise.
+        Raises a value error if the authentication fails.
+        """
         if self.network_check_in_progress:
             self.log.info("Network access check already in progress, skipping")
             return False
@@ -305,6 +312,7 @@ class WirelessNetwork:
         return timestamp
 
     async def async_sync_rtc_from_ntp(self) -> bool:
+        result = False
         try:
             if await self.check_network_access():
                 timestamp = await self.async_get_timestamp_from_ntp()
@@ -327,7 +335,7 @@ class WirelessNetwork:
     
     def is_connected(self) -> bool:
         """
-        Determines of the wifi connection is connected and has an IP address.
+        Determines if the wifi connection is connected and has an IP address.
         Returns:
             bool: True if connected with IP, False otherwise.
         """
