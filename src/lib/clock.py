@@ -4,7 +4,7 @@ from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID,
 from machine import freq, I2C, RTC
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
-from lib.ds3231.ds3231 import DS3231
+from lib.external_rtc import ExternalRTC
 
 class Clock:
     
@@ -21,10 +21,14 @@ class Clock:
         self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "RTC", "status": False}, {"name": "NTP", "status": False}, {"name": "PRTC", "status": False}]
         self.wifi = WirelessNetwork()
         self.rtc = RTC()
-        self.external_rtc = None
-        self.init_ds3231()
         self.displays = {}
         self.tests_running = []        
+        
+        self.external_rtc = ExternalRTC(self.i2c)
+        if self.external_rtc.init_DS3231():
+            self.log.info("Using external DS3231 RTC module for timekeeping")
+        else:
+            self.log.info("No external RTC module found, using internal RTC for timekeeping")
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -65,35 +69,6 @@ class Clock:
             self.log.info(f"Testing display '{name}'")
             create_task(display.async_display_test())
 
-    def init_ds3231(self) -> None:
-        """
-        Attempt to initialize the DS3231 RTC module if an I2C bus scan returns
-        a device at the expected address (0x68).
-        """
-        self.log.info("Initializing DS3231 RTC module")
-        try:
-            i2c_devices = self.i2c.scan()
-            if DS3231.I2C_ADDRESS not in i2c_devices:
-                self.log.warn("DS3231 RTC module not found on I2C bus")
-                return
-            
-            self.external_rtc = DS3231(self.i2c)
-
-            self.log.info("Running DS3231 RTC module read/write test")
-            test_date = (2024, 1, 12, 21, 22, 23)
-            self.external_rtc.set_time(*test_date)
-
-            year, month, day, hours, minutes, seconds = self.external_rtc.read_time()
-            if (year, month, day, hours, minutes, seconds) != test_date:
-                raise Exception("DS3231 RTC module read/write test failed")
-            else:                
-                self.log.info(f"DS3231 time read as {year}-{month:02d}-{day:02d} {hours:02d}:{minutes:02d}:{seconds:02d}")
-                self.log.info("DS3231 RTC module read/write test passed")
-            
-        except Exception as e:
-            self.log.error(f"Failed to initialize DS3231 RTC module: {e}")
-            self.external_rtc = None
-    
     def clock_loop_should_run(self) -> bool:
         """
         Determine if the clock loop should run.
