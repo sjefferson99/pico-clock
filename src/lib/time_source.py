@@ -25,7 +25,7 @@ class TimeSource():
         self.log = uLogger("TimeSource")
         self.log.info("Initialising TimeSource")
         self.wifi = wifi
-        self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "RTC", "status": False}, {"name": "NTP", "status": False}, {"name": "PRTC", "status": False}]
+        self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "NTP", "status": False}, {"name": "RTC", "status": False}, {"name": "PRTC", "status": False}]
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.rtc = InternalRTC()
         self.external_rtc = ExternalRTC(self.i2c)

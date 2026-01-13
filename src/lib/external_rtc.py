@@ -1,3 +1,4 @@
+from lib.specific_time_source import SpecificTimeSource
 from lib.ulogging import uLogger
 from lib.ds3231.ds3231 import DS3231
 
@@ -9,11 +10,19 @@ except ImportError:
 if TYPE_CHECKING:
     from machine import I2C
 
-class ExternalRTC:
-    
+class ExternalRTC(SpecificTimeSource):
+    """
+    ExternalRTC manages external RTC modules connected via I2C.
+    Calls to the specific installed RTC module methods are abstracted
+    through this class.
+    Ensure new modules are added to MODULE_OPERATIONS mapping.
+    Module methods must return data in the format specified in
+    SpecificTimeSource.
+    """
+
     MODULE_OPERATIONS = {
         "DS3231": {
-            "read_time": "read_time",
+            "get_time": "get_time",
             "set_time": "set_time",
         }
     }
@@ -31,12 +40,12 @@ class ExternalRTC:
         Args:
             i2c: An initialised I2C interface.
         """
+        super().__init__()
         self.log = uLogger("ExternalRTC")
-        self.log.info("Initializing external RTC module")
+        self.log.info("initialising external RTC module")
         self.i2c = i2c
         self.RTC = None
         self.rtc_type = None
-        
 
     def init_DS3231(self) -> bool:
         """
@@ -59,7 +68,7 @@ class ExternalRTC:
             test_date = (2024, 1, 12, 21, 22, 23)
             self.RTC.set_time(*test_date)
             
-            year, month, day, hours, minutes, seconds = self.RTC.read_time()
+            year, month, day, hours, minutes, seconds = self.RTC.get_time()
             if (year, month, day, hours, minutes, seconds) != test_date:
                 raise Exception("DS3231 RTC module read/write test failed")
             else:                
@@ -67,7 +76,7 @@ class ExternalRTC:
                 self.log.info("DS3231 RTC module read/write test passed")
             
         except Exception as e:
-            self.log.error(f"Failed to initialize DS3231 RTC module: {e}")
+            self.log.error(f"Failed to initialise DS3231 RTC module: {e}")
             self.RTC = None
             self.rtc_type = None
         
@@ -91,7 +100,6 @@ class ExternalRTC:
         if not self.RTC:
             raise Exception(f"{self.rtc_type or 'RTC'} module not initialised")
         
-        # Check if operation is supported by any module
         supported_ops = set()
         for module_ops in self.MODULE_OPERATIONS.values():
             supported_ops.update(module_ops.keys())
@@ -99,7 +107,6 @@ class ExternalRTC:
         if operation not in supported_ops:
             raise Exception(f"Operation '{operation}' not supported")
         
-        # Get the actual method name for this RTC module type
         if self.rtc_type in self.MODULE_OPERATIONS:
             rtc_method_name = self.MODULE_OPERATIONS[self.rtc_type].get(operation, operation)
         else:
@@ -111,13 +118,13 @@ class ExternalRTC:
         method = getattr(self.RTC, rtc_method_name)
         return method(*args, **kwargs)
     
-    def read_time(self) -> tuple:
+    def get_time(self) -> tuple:
         """
         Read current time from the RTC module.
         Returns:
             A tuple with values: year, month, day, hours, minutes, seconds.
         """
-        return self._call_rtc_method("read_time")
+        return self._call_rtc_method("get_time")
     
     def set_time(self, year: int, month: int, day: int, hours: int, minutes: int, seconds: int) -> None:
         """

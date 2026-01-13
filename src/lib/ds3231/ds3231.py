@@ -33,7 +33,7 @@ class DS3231:
         """Convert decimal to BCD."""
         return ((decimal // 10) << 4) | (decimal % 10)
     
-    def read_time(self) -> tuple:
+    def get_time(self) -> tuple:
         """
         Read current time from DS3231.
         Returns:
