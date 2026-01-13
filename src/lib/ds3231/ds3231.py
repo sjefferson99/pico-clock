@@ -1,4 +1,6 @@
-class DS3231:
+from lib.specific_time_source import SpecificTimeSource
+
+class DS3231(SpecificTimeSource):
     I2C_ADDRESS = 0x68
 
     REGISTERS = {

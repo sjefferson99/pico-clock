@@ -120,8 +120,15 @@ class TimeSource():
                 return
         
         # Default fallback to internal RTC
-        self.log.error("No time source available, using potentially incorrect internal RTC value")
-        self.time_source = self.rtc
+        self.log.error("No time source available, using potentially incorrect RTC value")
+        if self.external_rtc.is_configured():
+            self.log.info("Selected time source: RTC")
+            self.time_source = self.external_rtc
+            return
+        else:
+            self.log.info("Selected time source: PRTC. No external RTC available.")
+            self.time_source = self.rtc
+            return
 
     def get_time_sync_status(self) -> list:
         """

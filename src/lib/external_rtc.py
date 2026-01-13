@@ -15,17 +15,10 @@ class ExternalRTC(SpecificTimeSource):
     ExternalRTC manages external RTC modules connected via I2C.
     Calls to the specific installed RTC module methods are abstracted
     through this class.
-    Ensure new modules are added to MODULE_OPERATIONS mapping.
-    Module methods must return data in the format specified in
-    SpecificTimeSource.
+    Ensure new modules are added to supported_modules and
+    initialisation methods are created (e.g., init_DS3231()).
+    Module methods must extend SpecificTimeSource.
     """
-
-    MODULE_OPERATIONS = {
-        "DS3231": {
-            "get_time": "get_time",
-            "set_time": "set_time",
-        }
-    }
 
     def __init__(self, i2c: I2C) -> None:
         """
@@ -34,7 +27,6 @@ class ExternalRTC(SpecificTimeSource):
         through this class.
 
         Call get_supported_modules() to see supported RTC types.
-        Call get_supported_operations() to see supported operations.
         Call init_{modulename}() to attempt initialisation.
         
         Args:
@@ -44,8 +36,9 @@ class ExternalRTC(SpecificTimeSource):
         self.log = uLogger("ExternalRTC")
         self.log.info("initialising external RTC module")
         self.i2c = i2c
-        self.RTC = None
-        self.rtc_type = None
+        self.RTC: SpecificTimeSource = SpecificTimeSource()
+        self.supported_modules = ["DS3231"]
+        self.RTC_configured = False
 
     def init_DS3231(self) -> bool:
         """
@@ -58,11 +51,11 @@ class ExternalRTC(SpecificTimeSource):
             i2c_devices = self.i2c.scan()
             if DS3231.I2C_ADDRESS not in i2c_devices:
                 self.log.warn("DS3231 RTC module not found on I2C bus")
-                self.RTC = None
+                self.RTC = SpecificTimeSource()
                 return False
             
             self.RTC = DS3231(self.i2c)
-            self.rtc_type = "DS3231"
+            self.RTC_configured = True
 
             self.log.info("Running DS3231 RTC module read/write test")
             test_date = (2024, 1, 12, 21, 22, 23)
@@ -77,46 +70,10 @@ class ExternalRTC(SpecificTimeSource):
             
         except Exception as e:
             self.log.error(f"Failed to initialise DS3231 RTC module: {e}")
-            self.RTC = None
-            self.rtc_type = None
+            self.RTC = SpecificTimeSource()
+            return False
         
-        return True if self.RTC else False
-    
-    def _call_rtc_method(self, operation: str, *args, **kwargs):
-        """
-        Call a method on the underlying RTC module using the abstraction mapping.
-        
-        Args:
-            operation: The operation name (e.g., "read_time", "set_time")
-            *args: Positional arguments to pass to the RTC method
-            **kwargs: Keyword arguments to pass to the RTC method
-            
-        Returns:
-            The return value from the RTC module method
-            
-        Raises:
-            Exception if RTC not initialised or operation not supported
-        """
-        if not self.RTC:
-            raise Exception(f"{self.rtc_type or 'RTC'} module not initialised")
-        
-        supported_ops = set()
-        for module_ops in self.MODULE_OPERATIONS.values():
-            supported_ops.update(module_ops.keys())
-        
-        if operation not in supported_ops:
-            raise Exception(f"Operation '{operation}' not supported")
-        
-        if self.rtc_type in self.MODULE_OPERATIONS:
-            rtc_method_name = self.MODULE_OPERATIONS[self.rtc_type].get(operation, operation)
-        else:
-            rtc_method_name = operation
-        
-        if not hasattr(self.RTC, rtc_method_name):
-            raise Exception(f"RTC module {self.rtc_type} does not support '{operation}'")
-        
-        method = getattr(self.RTC, rtc_method_name)
-        return method(*args, **kwargs)
+        return True
     
     def get_time(self) -> tuple:
         """
@@ -124,7 +81,7 @@ class ExternalRTC(SpecificTimeSource):
         Returns:
             A tuple with values: year, month, day, hours, minutes, seconds.
         """
-        return self._call_rtc_method("get_time")
+        return self.RTC.get_time()
     
     def set_time(self, year: int, month: int, day: int, hours: int, minutes: int, seconds: int) -> None:
         """
@@ -137,7 +94,7 @@ class ExternalRTC(SpecificTimeSource):
             minutes: Minutes (0-59)
             seconds: Seconds (0-59)
         """
-        return self._call_rtc_method("set_time", year, month, day, hours, minutes, seconds)
+        return self.RTC.set_time(year, month, day, hours, minutes, seconds)
     
     def get_supported_modules(self) -> list:
         """
@@ -145,24 +102,12 @@ class ExternalRTC(SpecificTimeSource):
         Returns:
             A list of supported RTC module type names.
         """
-        return list(self.MODULE_OPERATIONS.keys())
+        return self.supported_modules
     
-    def get_supported_operations(self, module_type: str = "") -> list:
+    def is_configured(self) -> bool:
         """
-        Get a list of supported operations across all RTC modules.
-        Or get operations for a specific module type if provided.
-        Args:
-            module_type[str]: Optional RTC module type name.
+        Check if an RTC module has been successfully initialised.
         Returns:
-            A list of supported operation names.
+            True if an RTC module is configured, False otherwise.
         """
-        if module_type:
-            if module_type in self.MODULE_OPERATIONS:
-                return list(self.MODULE_OPERATIONS[module_type].keys())
-            else:
-                return []
-        else:
-            supported_ops = set()
-            for module_ops in self.MODULE_OPERATIONS.values():
-                supported_ops.update(module_ops.keys())
-            return list(supported_ops)
+        return self.RTC_configured
