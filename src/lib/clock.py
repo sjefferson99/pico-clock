@@ -86,13 +86,30 @@ class Clock:
             
             if self.time_source.get_time() != self.last_time:
                 self.log.info(f"Time now is {self.time_source.get_time()}")
-                hour, minute, second = self.time_source.get_time()[3:6]
-                time_string = f"{hour:02d}{minute:02d}{second:02d}"
+                year, month, day, hour, minute, second = self.time_source.get_time()[0:6]
+                time_string = f"{year:04d}{month:02d}{day:02d}{hour:02d}{minute:02d}{second:02d}"
                 self.log.info(f"Updating display to: {time_string}")
                 for i in range(4):
-                    self.displays["hour_minute"].set_character(time_string[i], i)
+                    self.displays["hour_minute"].set_character(time_string[8+i], i)
                 self.render_seconds_colon(int(second))
                 self.displays["hour_minute"].draw()
+                
+                # Display seconds on seconds display
+                for i in range(2):
+                    self.displays["seconds"].set_character(time_string[12+i], i)
+                self.displays["seconds"].draw()
+                
+                # Display day and month on day_month
+                day_month_string = f"{day:02d}{month:02d}"
+                for i in range(4):
+                    self.displays["day_month"].set_character(day_month_string[i], i)
+                self.displays["day_month"].draw()
+                
+                # Display 4 digit year
+                for i in range(4):
+                    self.displays["year"].set_character(time_string[i], i)
+                self.displays["year"].draw()
+                
                 self.last_time = self.time_source.get_time()
 
                 self.set_status_display()
