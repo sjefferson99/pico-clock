@@ -33,6 +33,8 @@ DISPLAY_ADDRESSES = {
     "year": 0x74
 }
 
+TIME_SIGNAL_PIN = 15  # GPIO pin for time signal input
+
 # Display brightness for HT16K33 displays: valid range 0 (dim/off) to 15 (maximum)
 DISPLAY_BRIGHTNESS = 15
 

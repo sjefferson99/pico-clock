@@ -5,6 +5,7 @@ from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_FRE
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
 from lib.time_source import TimeSource
+from lib.time_signal import TimeSignal
 
 class Clock:
     
@@ -22,6 +23,7 @@ class Clock:
         self.tests_running = []        
         self.wifi = WirelessNetwork()
         self.time_source = TimeSource(self.wifi)
+        self.time_signal = TimeSignal()
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -29,6 +31,7 @@ class Clock:
         self.time_source.startup()
         self.init_displays()
         self.test_all_displays()
+        self.time_signal.startup()
 
         self.log.info("Starting clock loop")
         create_task(self.async_clock_loop())
