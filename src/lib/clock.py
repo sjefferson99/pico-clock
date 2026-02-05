@@ -85,32 +85,21 @@ class Clock:
                 continue
             
             if self.time_source.get_time() != self.last_time:
-                self.log.info(f"Time now is {self.time_source.get_time()}")
-                year, month, day, hour, minute, second = self.time_source.get_time()[0:6]
-                time_string = f"{year:04d}{month:02d}{day:02d}{hour:02d}{minute:02d}{second:02d}"
-                self.log.info(f"Updating display to: {time_string}")
-                for i in range(4):
-                    self.displays["hour_minute"].set_character(time_string[8+i], i)
-                self.render_seconds_colon(int(second))
-                self.displays["hour_minute"].draw()
-                
-                # Display seconds on seconds display
-                for i in range(2):
-                    self.displays["seconds"].set_character(time_string[12+i], i)
-                self.displays["seconds"].draw()
-                
-                # Display day and month on day_month
-                day_month_string = f"{day:02d}{month:02d}"
-                for i in range(4):
-                    self.displays["day_month"].set_character(day_month_string[i], i)
-                self.displays["day_month"].draw()
-                
-                # Display 4 digit year
-                for i in range(4):
-                    self.displays["year"].set_character(time_string[i], i)
-                self.displays["year"].draw()
-                
+                self.log.info("Time change detected, updating displays")
                 self.last_time = self.time_source.get_time()
+                
+                year, month, day, hour, minute, second = self.time_source.get_time()[0:6]
+                
+                self.log.info(f"Updating time display: {self.last_time}")
+                
+                self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}")
+                self.render_seconds_colon(int(second))
+                
+                self.displays["seconds"].print_text(f"{second:02d}" + "00", True)
+                                
+                self.displays["day_month"].print_text(f"{day:02d}{month:02d}", True)
+                
+                self.displays["year"].print_text(f"{year:04d}")
 
                 self.set_status_display()
 
@@ -128,6 +117,7 @@ class Clock:
         else:
             self.log.info("Showing seconds colon")
             self.displays["hour_minute"].set_colon(True)
+        self.displays["hour_minute"].draw()
     
     def set_status_display(self) -> None:
         """

@@ -95,18 +95,21 @@ class Display(HT16K33Segment):
         """
         return self.name
 
-    def print_text(self, text: str) -> None:
+    def print_text(self, text: str, colon: bool = False) -> None:
         """
         Print text to the display.
         The display can show up to 4 characters; excess characters are ignored.
         
         :param text: Text to display
         :type text: str
+        :param colon: Whether to display the colon
+        :type colon: bool
         """
         text = str(text)
         self.clear()
         for i in range(min(4, len(text))):
             self.print_character(text[i], i)
+        self.set_colon(colon)
         self.draw()
 
     def print_character(self, char: str, position: int) -> None:
