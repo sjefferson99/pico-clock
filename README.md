@@ -21,5 +21,8 @@ To save you frustrating googling for specific pinout from the datasheet vaguenes
 "day_month": 0x73
 "year": 0x74
 
+Looks a bit like this:
+![pico_clock](images/pico_clock.jpg)
+
 ## Code
 Copy src folder to pico, review config file and then restart to execute main.py.
