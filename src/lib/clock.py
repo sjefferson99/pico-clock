@@ -95,9 +95,9 @@ class Clock:
                 self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}")
                 self.render_seconds_colon(int(second))
                 
-                self.displays["seconds"].print_text(f"{second:02d}" + "00", True)
+                self.displays["seconds"].print_text(f"{second:02d}" + "00", dots=[1])
                                 
-                self.displays["day_month"].print_text(f"{day:02d}{month:02d}", True)
+                self.displays["day_month"].print_text(f"{day:02d}{month:02d}", dots=[1, 3])
                 
                 self.displays["year"].print_text(f"{year:04d}")
 

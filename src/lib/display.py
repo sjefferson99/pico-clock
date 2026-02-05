@@ -95,7 +95,7 @@ class Display(HT16K33Segment):
         """
         return self.name
 
-    def print_text(self, text: str, colon: bool = False) -> None:
+    def print_text(self, text: str, colon: bool = False, dots: list = []) -> None:
         """
         Print text to the display.
         The display can show up to 4 characters; excess characters are ignored.
@@ -104,15 +104,17 @@ class Display(HT16K33Segment):
         :type text: str
         :param colon: Whether to display the colon
         :type colon: bool
+        :param dots: List of positions to display dots
+        :type dots: list
         """
         text = str(text)
         self.clear()
         for i in range(min(4, len(text))):
-            self.print_character(text[i], i)
+            self.print_character(text[i], i, has_dot=(dots is not None and i in dots))
         self.set_colon(colon)
         self.draw()
 
-    def print_character(self, char: str, position: int) -> None:
+    def print_character(self, char: str, position: int, has_dot: bool=False) -> None:
         """
         Print a single character at a specified position on the display.
         Current supported characters are 0-9, A-F and custom glyphs G, N, O, P, R, S, T.
@@ -122,14 +124,16 @@ class Display(HT16K33Segment):
         :type char: str
         :param position: Position on the display (0-3)
         :type position: int
+        :param has_dot: Whether the character has a dot
+        :type has_dot: bool
         """
         char = char.upper()
         if char in '0123456789ABCDEF':
-            self.set_character(char, position)
+            self.set_character(char, position, has_dot)
         else:
             if char in self.glyphs:
-                self.set_glyph(self.glyphs[char], position)
+                self.set_glyph(self.glyphs[char], position, has_dot)
             else:
                 if hasattr(self, "log") and self.log is not None:
                     self.log.warn(f"Unsupported character {char} at position {position}; displaying blank.")
-                self.set_glyph(0x00, position)
+                self.set_glyph(0x00, position, has_dot)
