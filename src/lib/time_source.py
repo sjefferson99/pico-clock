@@ -116,8 +116,12 @@ class TimeSource():
         except Exception as e:
             self.log.error(f"Error getting time from source: {e}. Updating available time sources to retry.")
             self.update_time_source()
+        try:
             return self.time_source.get_time()
-    
+        except Exception as retry_error:
+            self.log.error(f"Retrying to get time from updated source also failed: {retry_error}")
+            raise
+
     def set_time(self, time_tuple: tuple) -> None:
         """
         Set the current time on the best available time source.
@@ -129,7 +133,11 @@ class TimeSource():
         except Exception as e:
             self.log.error(f"Error setting time on source: {e}. Updating available time sources to retry.")
             self.update_time_source()
-            self.time_source.set_time(time_tuple)
+            try:  
+                self.time_source.set_time(*time_tuple)  
+            except Exception as retry_error:  
+                self.log.error(f"Retrying to set time on updated source also failed: {retry_error}")  
+                raise  
     
     def update_time_source(self) -> None:
         """
