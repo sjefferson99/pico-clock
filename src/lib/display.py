@@ -30,6 +30,8 @@ class Display(HT16K33Segment):
         super().__init__(i2c, i2c_address=address)
         self.log = uLogger(f"Init display-0x{address:02X}: {name}")
         self.name = name
+        self.brightness_state = 1
+        self.power_on()
         self.set_brightness(DISPLAY_BRIGHTNESS)
         self.set_blink_rate(0)
         self.set_colon(False)
@@ -140,3 +142,27 @@ class Display(HT16K33Segment):
                 if hasattr(self, "log") and self.log is not None:
                     self.log.warn(f"Unsupported character {char} at position {position}; displaying blank.")
                 self.set_glyph(0x00, position, has_dot)
+
+    def toggle_brightness(self) -> None:
+        """
+        Toggle brightness between 3 levels: Full (15), Configured (DISPLAY_BRIGHTNESS) and Off (0).
+        """
+        if self.brightness_state == 2:
+            self.brightness_state = 0
+            self.power_off()
+            self.log.info(f"Toggling brightness for display '{self.name}' to 0 (off)")
+            return
+        
+        elif self.brightness_state == 0:
+            self.brightness_state = 1
+            self.power_on()
+            brightness = DISPLAY_BRIGHTNESS
+            
+        else:
+            self.brightness_state = 2
+            self.power_on()
+            brightness = 15
+            
+        
+        self.log.info(f"Toggling brightness for display '{self.name}' to {brightness} (state {self.brightness_state})")
+        self.set_brightness(brightness)
