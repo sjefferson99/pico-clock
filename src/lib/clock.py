@@ -91,8 +91,8 @@ class Clock:
                 
                 year, month, day, hour, minute, second = now_time[0:6]
                 
-                self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}")
-                self.render_seconds_colon(int(second))
+                colon = self.should_render_seconds_colon(int(second))
+                self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}", colon=colon)
                 
                 self.displays["seconds"].print_text(f"{second:02d}" + "00", dots=[1])
                                 
@@ -105,19 +105,19 @@ class Clock:
 
             await sleep_ms(1)
     
-    def render_seconds_colon(self, seconds: int) -> None:
+    def should_render_seconds_colon(self, seconds: int) -> bool:
         """
-        Display seconds colon based on current second passed - odds show, evens hide.
+        Determine if seconds colon should display based on current second
+        passed - odds show, evens hide.
         """
         seconds = seconds % 60
 
         if seconds % 2 == 1:
-            self.log.info("Hiding seconds colon")
-            self.displays["hour_minute"].set_colon(False)
+            self.log.info("Should hide seconds colon")
+            return False
         else:
-            self.log.info("Showing seconds colon")
-            self.displays["hour_minute"].set_colon(True)
-        self.displays["hour_minute"].draw()
+            self.log.info("Should show seconds colon")
+            return True
     
     def set_status_display(self) -> None:
         """
