@@ -101,8 +101,6 @@ class Clock:
 
             for display in self.displays.values():
                 display.toggle_brightness()
-                                
-                self.log.info(f"Brightness button pressed, toggling brightness for display '{display.name}'")
             
             await sleep_ms(20)
     

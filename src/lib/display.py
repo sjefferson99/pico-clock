@@ -38,7 +38,7 @@ class Display(HT16K33Segment):
         self.clear()
         self.draw()
         self.tests_running = tests_running
-        self.load_glyphs()        
+        self.load_glyphs()
 
     def load_glyphs(self) -> None:
         """
