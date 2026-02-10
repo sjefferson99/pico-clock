@@ -1,6 +1,8 @@
 # Pico Clock
 A 7 segment display based clock powered by the RPI pico. Modular in terms of what data is on display based on displays connected. Also variety of precision time sources to ensure the time displayed is accurate and future plans to create a portable NTP server with high accuracy and precision.
 
+Button controls display birghtness.
+
 ## Development
 A pico w or pico 2 w board should be compatible and sufficient. Ensure it is on recent firmware as it relies on asyncio. Development is on: [v1.27.0](https://micropython.org/resources/firmware/RPI_PICO_W-20251209-v1.27.0.uf2)
 
@@ -20,6 +22,8 @@ To save you frustrating googling for specific pinout from the datasheet vaguenes
 "seconds": 0x72
 "day_month": 0x73
 "year": 0x74
+
+Connect an optional button to a GPIO for display birghtness/off toggle and configure the GPIO in config.py.
 
 Looks a bit like this:
 ![pico_clock](images/pico_clock.jpg)

@@ -33,10 +33,10 @@ DISPLAY_ADDRESSES = {
     "year": 0x74
 }
 
-# Custom display brightness for HT16K33 displays: valid range 0 (dim/off) to 15 (maximum)
-DISPLAY_BRIGHTNESS = 8
+# Custom display brightness for HT16K33 displays: valid range 0 (dim) to 15 (maximum)
+DISPLAY_BRIGHTNESS = 0
 # GPIO for brightness toggle button - if not present, set to None and brightness will be set to DISPLAY_BRIGHTNESS
-# If set to a valid GPIO pin number, the button will toggle between Full brightness (15), DISPLAY_BRIGHTNESS and 0 (off) when pressed
+# If set to a valid GPIO pin number, the button will toggle between Full brightness (15), DISPLAY_BRIGHTNESS and off when pressed
 BRIGHTNESS_BUTTON = 2
 
 ## Run RTC full test (clears current time and date settings, so only enable for testing)
