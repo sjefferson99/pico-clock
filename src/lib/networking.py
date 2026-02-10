@@ -13,9 +13,10 @@ import struct
 
 class WirelessNetwork:
 
-    def __init__(self) -> None:
+    def __init__(self, on_time_sync=None) -> None:
         self.log = uLogger("WIFI")
         self.log.info("Initializing Wireless Network")
+        self.on_time_sync = on_time_sync
         self.status_led = StatusLED()
         self.wifi_ssid = config.WIFI_SSID
         self.wifi_password = config.WIFI_PASSWORD
@@ -66,6 +67,13 @@ class WirelessNetwork:
         self.mac_no_colons = self.mac.replace(":", "")
         self.hostname = self.determine_hostname()
         network.hostname(self.hostname)
+    
+    def set_ntp_sync_callback(self, callback) -> None:
+        """
+        Set a callback function to be called when an NTP sync occurs.
+        The callback should accept a single argument which will be a tuple with values (year, month, day, hour, minute, second, dayofweek, dayofyear).
+        """
+        self.on_time_sync = callback
 
     def get_mac_address(self) -> str:
         """
@@ -316,9 +324,18 @@ class WirelessNetwork:
         try:
             if await self.check_network_access():
                 timestamp = await self.async_get_timestamp_from_ntp()
+                self.log.info(f"NTP timestamp obtained: {timestamp}")
                 RTC().datetime((
                     timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
                     timestamp[3], timestamp[4], timestamp[5], 0))
+                
+                # Call time sync callback if registered
+                if self.on_time_sync:
+                    try:
+                        self.on_time_sync(timestamp)
+                    except Exception as e:
+                        self.log.error(f"Error in time sync callback: {e}")
+
                 self.ntp_last_synced_timestamp = time()
                 self.ntp_sync_status = True
                 self.prtc_sync_status = True

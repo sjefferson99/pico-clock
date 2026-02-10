@@ -1,10 +1,10 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
-
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_ID, I2C_FREQ
-from machine import freq, I2C, RTC
+from machine import freq, I2C
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
+from lib.time_source import TimeSource
 
 class Clock:
     
@@ -18,24 +18,21 @@ class Clock:
         self.log.info("Setting CPU frequency to: " + str(CLOCK_FREQUENCY / 1000000) + "MHz")
         freq(CLOCK_FREQUENCY)
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
-        self.time_sync_status = [{"name": "GPS", "status": False}, {"name": "RTC", "status": False}, {"name": "NTP", "status": False}, {"name": "PRTC", "status": False}]
-        self.wifi = WirelessNetwork()
-        self.rtc = RTC()
         self.displays = {}
         self.tests_running = []        
+        self.wifi = WirelessNetwork()
+        self.time_source = TimeSource(self.wifi, self.i2c)
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
         self.wifi.startup()
+        self.time_source.startup()
         self.init_displays()
-
         self.test_all_displays()
 
         self.log.info("Starting clock loop")
         create_task(self.async_clock_loop())
         self.log.info("Clock started with displays: " + ", ".join(self.displays.keys()))
-
-        create_task(self.async_check_time_sync_status())
 
         loop = get_event_loop()
         loop.run_forever()
@@ -62,7 +59,7 @@ class Clock:
         for name, display in self.displays.items():
             self.log.info(f"Testing display '{name}'")
             create_task(display.async_display_test())
-    
+
     def clock_loop_should_run(self) -> bool:
         """
         Determine if the clock loop should run.
@@ -79,24 +76,28 @@ class Clock:
         Main clock loop to update time and date displays.
         """
         self.log.info("Entering clock loop")
-        self.last_time = self.rtc.datetime()
+        self.last_time = self.time_source.get_time()
 
         while True:
             
             if not self.clock_loop_should_run():
                 await sleep_ms(100)
                 continue
-
-            if self.rtc.datetime() != self.last_time:
-                self.log.info(f"Time now is {self.rtc.datetime()}")
-                hour, minute, second = self.rtc.datetime()[4:7]
+            
+            now_time = self.time_source.get_time()
+            if now_time != self.last_time:
+                self.log.info(f"Time now is {now_time}")
+                hour, minute, second = now_time[3:6]
                 time_string = f"{hour:02d}{minute:02d}{second:02d}"
                 self.log.info(f"Updating display to: {time_string}")
                 for i in range(4):
                     self.displays["hour_minute"].set_character(time_string[i], i)
                 self.render_seconds_colon(int(second))
                 self.displays["hour_minute"].draw()
-                self.last_time = self.rtc.datetime()
+                self.last_time = now_time
+                
+                if second % 5 == 0:
+                    self.set_status_display()
 
             await sleep_ms(1)
     
@@ -112,42 +113,19 @@ class Clock:
         else:
             self.log.info("Showing seconds colon")
             self.displays["hour_minute"].set_colon(True)
-
-    async def async_check_time_sync_status(self) -> None:
-        """
-        Monitor and display the current time synchronization source
-        (for example, GPS, RTC, NTP, or PRTC) on the status display.
-        """
-        self.log.info("Starting time sync status checker")
-        
-        if self.displays.get("status") is None:
-            self.log.warn("No status display found, skipping time sync status checker")
-            return
-
-        while True:
-
-            if not self.clock_loop_should_run():
-                await sleep_ms(100)
-                continue
-
-            ntp_status = self.wifi.get_ntp_sync_status()
-            self.set_time_sync_status("NTP", ntp_status)
-            prtc_status = self.wifi.get_prtc_sync_status()
-            self.set_time_sync_status("PRTC", prtc_status)
-
-            self.set_status_display()
-
-            await sleep_ms(5000)
-
+    
     def set_status_display(self) -> None:
         """
         Update the status display with the current time synchronization method.
         """
+        if self.displays.get("status") is None:
+            return
+        
         current_method = ""
-        for method in self.time_sync_status:
+        for method in self.time_source.get_time_sync_status():
             
-            if method["status"]:
-                current_method = method["name"]
+            if method.get_status():
+                current_method = method.get_name()
                 break
 
         if current_method:
@@ -156,24 +134,3 @@ class Clock:
         else:
             self.log.info("No time synchronisation method active, updating status display to NONE")
             self.displays["status"].print_text("NONE")
-    
-    def set_time_sync_status(self, method_name: str, status: bool) -> None:
-        """
-        Update the status of a time synchronization method.
-
-        This method updates the `status` field of the entry in `self.time_sync_status`
-        whose `name` matches the given `method_name`. It is used to record whether a
-        specific time sync mechanism (for example, "NTP" or "PRTC") is currently
-        considered active or has successfully synchronized the system time.
-
-        :param method_name: Name of the time sync method to update (must match an
-                            existing entry in `self.time_sync_status`).
-        :param status: Boolean flag indicating the new status for the method (True if
-                       the method is available/has succeeded, False otherwise).
-        """
-        for method in self.time_sync_status:
-            if method["name"] == method_name:
-                method["status"] = status
-                self.log.info(f"Time sync status updated: {method_name} set to {status}")
-                return
-        self.log.warn(f"Time sync method '{method_name}' not found in status list")
