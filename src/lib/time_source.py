@@ -1,7 +1,6 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import I2C
-from config import I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ
 from lib.external_rtc import ExternalRTC
 from lib.internal_rtc import InternalRTC
 from asyncio import sleep_ms, create_task
@@ -26,7 +25,7 @@ class TimeSource():
     TimeSource returns time data from the best available time source based on sync status:
     GPS > NTP > External RTC (RTC) > Internal RTC (PRTC).
     """
-    def __init__(self, wifi: WirelessNetwork) -> None:
+    def __init__(self, wifi: WirelessNetwork, i2c: I2C) -> None:
         """
         Initialize TimeSource by initialising available time sources and
         setting the initial time source based on availability. TimeSource
@@ -37,12 +36,13 @@ class TimeSource():
         
         Args:
             wifi (WirelessNetwork): An instance of the WirelessNetwork class.
+            i2c (I2C): An initialized I2C interface.
         """
         self.log = uLogger("TimeSource")
         self.log.info("Initialising TimeSource")
         self.wifi = wifi
         self.time_sync_status = [TimeSyncStatus("GPS", False), TimeSyncStatus("NTP", False), TimeSyncStatus("RTC", False), TimeSyncStatus("PRTC", False)]
-        self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
+        self.i2c = i2c
         self.rtc = InternalRTC()
         self.external_rtc = ExternalRTC(self.i2c)
         self.external_rtc_sync_status = False

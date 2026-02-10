@@ -21,7 +21,7 @@ class Clock:
         self.displays = {}
         self.tests_running = []        
         self.wifi = WirelessNetwork()
-        self.time_source = TimeSource(self.wifi)
+        self.time_source = TimeSource(self.wifi, self.i2c)
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
