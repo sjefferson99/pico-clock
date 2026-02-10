@@ -11,16 +11,11 @@ class SpecificTimeSource:
         """
         raise NotImplementedError(f"get_time method must be implemented by {self.__class__.__name__}")
     
-    def set_time(self, year: int, month: int, day: int, hours: int, minutes: int, seconds: int) -> None:
+    def set_time(self, time_tuple: tuple) -> None:
         """ 
         Set the current time.
         Args:
-            year: Year (e.g., 2024)
-            month: Month (1-12)
-            day: Day (1-31)
-            hours: Hours (0-23)
-            minutes: Minutes (0-59)
-            seconds: Seconds (0-59)
+            time_tuple: A tuple with values: year, month, day, hours, minutes, seconds.
         """
         raise NotImplementedError(f"set_time method must be implemented by {self.__class__.__name__}")
     

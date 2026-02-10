@@ -17,17 +17,12 @@ class InternalRTC(SpecificTimeSource):
         Returns:
             A tuple with values: year, month, day, hours, minutes, seconds.
         """
-        return self.rtc.datetime()[:6]
+        return self.rtc.datetime()[:3] + self.rtc.datetime()[4:7]
     
-    def set_time(self, year: int, month: int, day: int, hours: int, minutes: int, seconds: int) -> None:
+    def set_time(self, time_tuple: tuple) -> None:
         """
         Set the current time on the internal RTC.
         Args:
-            year: Year (e.g., 2024)
-            month: Month (1-12)
-            day: Day (1-31)
-            hours: Hours (0-23)
-            minutes: Minutes (0-59)
-            seconds: Seconds (0-59)
+            time_tuple: A tuple with values: year, month, day, hours, minutes, seconds.
         """
-        self.rtc.datetime((year, month, day, 0, hours, minutes, seconds, 0))
+        self.rtc.datetime((time_tuple[0], time_tuple[1], time_tuple[2], 0, time_tuple[3], time_tuple[4], time_tuple[5], 0))

@@ -1,7 +1,7 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_FREQ
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
 from lib.time_source import TimeSource
@@ -17,11 +17,11 @@ class Clock:
         self.version = "0.0.1"
         self.log.info("Setting CPU frequency to: " + str(CLOCK_FREQUENCY / 1000000) + "MHz")
         freq(CLOCK_FREQUENCY)
-        self.i2c = I2C(0, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
+        self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.displays = {}
         self.tests_running = []        
         self.wifi = WirelessNetwork()
-        self.time_source = TimeSource(self.wifi)
+        self.time_source = TimeSource(self.wifi, self.i2c)
 
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -84,13 +84,12 @@ class Clock:
                 await sleep_ms(100)
                 continue
             
-            if self.time_source.get_time() != self.last_time:
-                self.log.info("Time change detected, updating displays")
-                self.last_time = self.time_source.get_time()
+            now_time = self.time_source.get_time()
+            if now_time != self.last_time:
+                self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
+                self.last_time = now_time
                 
-                year, month, day, hour, minute, second = self.time_source.get_time()[0:6]
-                
-                self.log.info(f"Updating time display: {self.last_time}")
+                year, month, day, hour, minute, second = now_time[0:6]
                 
                 self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}")
                 self.render_seconds_colon(int(second))
@@ -101,7 +100,8 @@ class Clock:
                 
                 self.displays["year"].print_text(f"{year:04d}")
 
-                self.set_status_display()
+                if second % 5 == 0:
+                    self.set_status_display()
 
             await sleep_ms(1)
     
@@ -129,8 +129,8 @@ class Clock:
         current_method = ""
         for method in self.time_source.get_time_sync_status():
             
-            if method["status"]:
-                current_method = method["name"]
+            if method.get_status():
+                current_method = method.get_name()
                 break
 
         if current_method:
