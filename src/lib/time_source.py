@@ -29,9 +29,12 @@ class TimeSource():
     def __init__(self, wifi: WirelessNetwork) -> None:
         """
         Initialize TimeSource by initialising available time sources and
-        returning data from the best available source.
-        Requires the WirelessNetwork instance to perform NTP and RTC operations
-
+        setting the initial time source based on availability. TimeSource
+        relies on the WirelessNetwork class to provide NTP sync status and to
+        call the provided on_ntp_sync callback when an NTP sync occurs.
+        TimeSource also manages the external RTC module if available, and will
+        update it with the latest time when an NTP sync occurs.
+        
         Args:
             wifi (WirelessNetwork): An instance of the WirelessNetwork class.
         """
@@ -44,6 +47,10 @@ class TimeSource():
         self.external_rtc = ExternalRTC(self.i2c)
         self.external_rtc_sync_status = False
         self.init_external_rtc()
+        # At initialization all sync statuses are False because async_check_time_sync_status()
+        # has not run yet. This initial update_time_source() intentionally relies on the
+        # fallback logic (external/internal RTC) to choose a sane starting time source. Once
+        # the async task starts updating time_sync_status, subsequent calls will promote NTP/PRTC.
         self.time_source: SpecificTimeSource = self.rtc
         self.update_time_source()
 
@@ -180,7 +187,8 @@ class TimeSource():
         """
         for method in self.get_time_sync_status():
             if method.get_name() == method_name:
-                method.set_status(status)
-                self.log.info(f"Time sync status updated: {method_name} set to {status}")
+                if method.get_status() != status:
+                    method.set_status(status)
+                    self.log.info(f"Time sync status updated: {method_name} set to {status}")
                 return
         self.log.warn(f"Time sync method '{method_name}' not found in status list")
