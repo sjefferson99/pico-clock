@@ -86,33 +86,42 @@ class Clock:
             
             now_time = self.time_source.get_time()
             if now_time != self.last_time:
-                self.log.info(f"Time now is {now_time}")
-                hour, minute, second = now_time[3:6]
-                time_string = f"{hour:02d}{minute:02d}{second:02d}"
-                self.log.info(f"Updating display to: {time_string}")
-                for i in range(4):
-                    self.displays["hour_minute"].set_character(time_string[i], i)
-                self.render_seconds_colon(int(second))
-                self.displays["hour_minute"].draw()
+                self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
                 self.last_time = now_time
                 
+                year, month, day, hour, minute, second = now_time[0:6]
+                
+                colon = self.should_render_seconds_colon(int(second))
+                updates = [
+                    ("hour_minute", f"{hour:02d}{minute:02d}", {"colon": colon}),
+                    ("seconds", f"{second:02d}" + "00", {"dots": 0b0100}),
+                    ("day_month", f"{day:02d}{month:02d}", {"dots": 0b0101}),
+                    ("year", f"{year:04d}", {}),
+                ]
+
+                for name, text, kwargs in updates:
+                    display = self.displays.get(name)
+                    if display:
+                        display.print_text(text, **kwargs)
+
                 if second % 5 == 0:
                     self.set_status_display()
 
             await sleep_ms(1)
     
-    def render_seconds_colon(self, seconds: int) -> None:
+    def should_render_seconds_colon(self, seconds: int) -> bool:
         """
-        Display seconds colon based on current second passed - odds show, evens hide.
+        Determine if seconds colon should display based on current second
+        passed - odds show, evens hide.
         """
         seconds = seconds % 60
 
         if seconds % 2 == 1:
-            self.log.info("Hiding seconds colon")
-            self.displays["hour_minute"].set_colon(False)
+            self.log.info("Should hide seconds colon")
+            return False
         else:
-            self.log.info("Showing seconds colon")
-            self.displays["hour_minute"].set_colon(True)
+            self.log.info("Should show seconds colon")
+            return True
     
     def set_status_display(self) -> None:
         """

@@ -95,21 +95,29 @@ class Display(HT16K33Segment):
         """
         return self.name
 
-    def print_text(self, text: str) -> None:
+    def print_text(self, text: str, colon: bool = False, dots: int = 0) -> None:
         """
         Print text to the display.
         The display can show up to 4 characters; excess characters are ignored.
         
         :param text: Text to display
         :type text: str
+        :param colon: Whether to display the colon
+        :type colon: bool
+        :param dots: 4-bit binary number (0b0000-0b1111) defining dot states
+                 Bit order is left-to-right: bit 3 -> position 0, bit 0 -> position 3
+        :type dots: int
         """
         text = str(text)
+        dot_mask = dots & 0x0F
         self.clear()
         for i in range(min(4, len(text))):
-            self.print_character(text[i], i)
+            has_dot = ((dot_mask >> (3 - i)) & 0x01) == 1
+            self.print_character(text[i], i, has_dot=has_dot)
+        self.set_colon(colon)
         self.draw()
 
-    def print_character(self, char: str, position: int) -> None:
+    def print_character(self, char: str, position: int, has_dot: bool=False) -> None:
         """
         Print a single character at a specified position on the display.
         Current supported characters are 0-9, A-F and custom glyphs G, N, O, P, R, S, T.
@@ -119,14 +127,16 @@ class Display(HT16K33Segment):
         :type char: str
         :param position: Position on the display (0-3)
         :type position: int
+        :param has_dot: Whether the character has a dot
+        :type has_dot: bool
         """
         char = char.upper()
         if char in '0123456789ABCDEF':
-            self.set_character(char, position)
+            self.set_character(char, position, has_dot)
         else:
             if char in self.glyphs:
-                self.set_glyph(self.glyphs[char], position)
+                self.set_glyph(self.glyphs[char], position, has_dot)
             else:
                 if hasattr(self, "log") and self.log is not None:
                     self.log.warn(f"Unsupported character {char} at position {position}; displaying blank.")
-                self.set_glyph(0x00, position)
+                self.set_glyph(0x00, position, has_dot)
