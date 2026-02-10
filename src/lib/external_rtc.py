@@ -37,7 +37,7 @@ class ExternalRTC(SpecificTimeSource):
         self.log = uLogger("ExternalRTC")
         self.log.info("initialising external RTC module")
         self.i2c = i2c
-        self.RTC: SpecificTimeSource = SpecificTimeSource()
+        self.RTC: SpecificTimeSource | None= None
         self.supported_modules = ["DS3231"]
         self.RTC_configured = False
 
@@ -52,7 +52,7 @@ class ExternalRTC(SpecificTimeSource):
             i2c_devices = self.i2c.scan()
             if DS3231.I2C_ADDRESS not in i2c_devices:
                 self.log.warn("DS3231 RTC module not found on I2C bus")
-                self.RTC = SpecificTimeSource()
+                self.RTC = None
                 return False
             
             self.RTC = DS3231(self.i2c)
@@ -89,6 +89,8 @@ class ExternalRTC(SpecificTimeSource):
         Returns:
             A tuple with values: year, month, day, hours, minutes, seconds.
         """
+        if self.RTC is None:
+            raise Exception("RTC module not initialised")
         return self.RTC.get_time()
     
     def set_time(self, time_tuple: tuple) -> None:
@@ -97,6 +99,8 @@ class ExternalRTC(SpecificTimeSource):
         Args:
             time_tuple: A tuple with values: year, month, day, hours, minutes, seconds.
         """
+        if self.RTC is None:
+            raise Exception("RTC module not initialised")
         self.RTC.set_time(*time_tuple)
     
     def get_supported_modules(self) -> list:
