@@ -10,14 +10,13 @@ from asyncio import sleep, create_task
 from machine import RTC
 from socket import getaddrinfo, socket, AF_INET, SOCK_DGRAM
 import struct
-from lib.external_rtc import ExternalRTC
 
 class WirelessNetwork:
 
-    def __init__(self) -> None:
+    def __init__(self, on_time_sync=None) -> None:
         self.log = uLogger("WIFI")
         self.log.info("Initializing Wireless Network")
-        self.external_rtc = None
+        self.on_time_sync = on_time_sync
         self.status_led = StatusLED()
         self.wifi_ssid = config.WIFI_SSID
         self.wifi_password = config.WIFI_PASSWORD
@@ -50,7 +49,6 @@ class WirelessNetwork:
         self.ntp_last_synced_timestamp = 0
         self.ntp_sync_status = False
         self.prtc_sync_status = False
-        self.external_rtc_status = False
         self.network_check_in_progress = False
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
@@ -70,8 +68,12 @@ class WirelessNetwork:
         self.hostname = self.determine_hostname()
         network.hostname(self.hostname)
     
-    def enable_external_rtc(self, external_rtc: ExternalRTC) -> None:
-        self.external_rtc = external_rtc
+    def set_ntp_sync_callback(self, callback) -> None:
+        """
+        Set a callback function to be called when an NTP sync occurs.
+        The callback should accept a single argument which will be a tuple with values (year, month, day, hour, minute, second, dayofweek, dayofyear).
+        """
+        self.on_time_sync = callback
 
     def get_mac_address(self) -> str:
         """
@@ -322,19 +324,17 @@ class WirelessNetwork:
         try:
             if await self.check_network_access():
                 timestamp = await self.async_get_timestamp_from_ntp()
+                self.log.info(f"NTP timestamp obtained: {timestamp}")
                 RTC().datetime((
                     timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
                     timestamp[3], timestamp[4], timestamp[5], 0))
-                if self.external_rtc is not None:
+                
+                # Call time sync callback if registered
+                if self.on_time_sync:
                     try:
-                        self.external_rtc.set_time(
-                            timestamp[0], timestamp[1], timestamp[2], timestamp[3], timestamp[4], timestamp[5]
-                            )
-                        self.log.info("External RTC time updated from NTP")
-                        self.external_rtc_status = True
+                        self.on_time_sync(timestamp)
                     except Exception as e:
-                        self.log.error(f"Failed to set time on external RTC: {e}")
-                        self.external_rtc_status = False
+                        self.log.error(f"Error in time sync callback: {e}")
 
                 self.ntp_last_synced_timestamp = time()
                 self.ntp_sync_status = True
@@ -373,11 +373,3 @@ class WirelessNetwork:
             bool: True if last PRTC sync was successful, False otherwise.
         """
         return self.prtc_sync_status
-    
-    def get_external_rtc_status(self) -> bool:
-        """
-        Returns the current external RTC status.
-        Returns:
-            bool: True if external RTC is functioning, False otherwise.
-        """        
-        return self.external_rtc_status

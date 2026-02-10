@@ -122,8 +122,8 @@ class Clock:
         current_method = ""
         for method in self.time_source.get_time_sync_status():
             
-            if method["status"]:
-                current_method = method["name"]
+            if method.get_status():
+                current_method = method.get_name()
                 break
 
         if current_method:

@@ -1,4 +1,5 @@
 from lib.specific_time_source import SpecificTimeSource
+from machine import I2C
 
 class DS3231(SpecificTimeSource):
     I2C_ADDRESS = 0x68
@@ -18,7 +19,7 @@ class DS3231(SpecificTimeSource):
         "temp_lsb": 0x12,
     }
 
-    def __init__(self, i2c):
+    def __init__(self, i2c: I2C):
         """
         Initialize DS3231 with given I2C interface.
         Args:
@@ -56,8 +57,7 @@ class DS3231(SpecificTimeSource):
             minutes,
             seconds
         )
-    
-    def set_time(self, year, month, day, hours, minutes, seconds):
+    def set_time(self, year: int, month: int, day: int, hours: int, minutes: int, seconds: int):
         """
         Set current time on DS3231.
         Args:
