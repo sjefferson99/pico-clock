@@ -36,5 +36,8 @@ DISPLAY_ADDRESSES = {
 # Display brightness for HT16K33 displays: valid range 0 (dim/off) to 15 (maximum)
 DISPLAY_BRIGHTNESS = 15
 
+## Run RTC full test (clears current time and date settings, so only enable for testing)
+RTC_FULL_TEST = False
+
 ## Overclocking - Pico1 default 133MHz, Pico2 default 150MHz
 CLOCK_FREQUENCY = 133000000

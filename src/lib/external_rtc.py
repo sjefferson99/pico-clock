@@ -1,3 +1,4 @@
+from config import RTC_FULL_TEST
 from lib.specific_time_source import SpecificTimeSource
 from lib.ulogging import uLogger
 from lib.ds3231.ds3231 import DS3231
@@ -57,16 +58,23 @@ class ExternalRTC(SpecificTimeSource):
             self.RTC = DS3231(self.i2c)
             self.RTC_configured = True
 
-            self.log.info("Running DS3231 RTC module read/write test")
-            test_date = (2024, 1, 12, 21, 22, 23)
-            self.RTC.set_time(*test_date)
+            if RTC_FULL_TEST:
+                self.log.info("Running DS3231 RTC module read/write test")
+                test_date = (2024, 1, 12, 21, 22, 23)
+                self.RTC.set_time(*test_date)
+                
+                year, month, day, hours, minutes, seconds = self.RTC.get_time()
+                if (year, month, day, hours, minutes, seconds) != test_date:
+                    raise Exception("DS3231 RTC module read/write test failed")
+                else:                
+                    self.log.info(f"DS3231 time read as {year}-{month:02d}-{day:02d} {hours:02d}:{minutes:02d}:{seconds:02d}")
+                    self.log.info("DS3231 RTC module read/write test passed")
             
-            year, month, day, hours, minutes, seconds = self.RTC.get_time()
-            if (year, month, day, hours, minutes, seconds) != test_date:
-                raise Exception("DS3231 RTC module read/write test failed")
-            else:                
-                self.log.info(f"DS3231 time read as {year}-{month:02d}-{day:02d} {hours:02d}:{minutes:02d}:{seconds:02d}")
-                self.log.info("DS3231 RTC module read/write test passed")
+            else:
+                timetuple = self.RTC.get_time()
+                self.log.info("Full external RTC test skipped (RTC_FULL_TEST is False)")
+                self.log.info(f"DS3231 time read as {timetuple}")
+                
             
         except Exception as e:
             self.log.error(f"Failed to initialise DS3231 RTC module: {e}")
