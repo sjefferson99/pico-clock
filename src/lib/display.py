@@ -31,6 +31,7 @@ class Display(HT16K33Segment):
         self.log = uLogger(f"Init display-0x{address:02X}: {name}")
         self.name = name
         self.brightness_state = 1
+        self.power_on()
         self.set_brightness(DISPLAY_BRIGHTNESS)
         self.set_blink_rate(0)
         self.set_colon(False)
@@ -146,15 +147,22 @@ class Display(HT16K33Segment):
         """
         Toggle brightness between 3 levels: Full (15), Configured (DISPLAY_BRIGHTNESS) and Off (0).
         """
-        if self.brightness_state == 0:
-            brightness = DISPLAY_BRIGHTNESS
-            self.brightness_state = 1
-        elif self.brightness_state == 1:
-            brightness = 15
-            self.brightness_state = 2
-        else:
-            brightness = 0
+        if self.brightness_state == 2:
             self.brightness_state = 0
+            self.power_off()
+            self.log.info(f"Toggling brightness for display '{self.name}' to 0 (off)")
+            return
+        
+        elif self.brightness_state == 0:
+            self.brightness_state = 1
+            self.power_on()
+            brightness = DISPLAY_BRIGHTNESS
+            
+        else:
+            self.brightness_state = 2
+            self.power_on()
+            brightness = 15
+            
         
         self.log.info(f"Toggling brightness for display '{self.name}' to {brightness} (state {self.brightness_state})")
         self.set_brightness(brightness)
