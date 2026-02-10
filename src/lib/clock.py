@@ -92,13 +92,17 @@ class Clock:
                 year, month, day, hour, minute, second = now_time[0:6]
                 
                 colon = self.should_render_seconds_colon(int(second))
-                self.displays["hour_minute"].print_text(f"{hour:02d}{minute:02d}", colon=colon)
-                
-                self.displays["seconds"].print_text(f"{second:02d}" + "00", dots=0b0100)
-                                
-                self.displays["day_month"].print_text(f"{day:02d}{month:02d}", dots=0b0101)
-                
-                self.displays["year"].print_text(f"{year:04d}")
+                updates = [
+                    ("hour_minute", f"{hour:02d}{minute:02d}", {"colon": colon}),
+                    ("seconds", f"{second:02d}" + "00", {"dots": 0b0100}),
+                    ("day_month", f"{day:02d}{month:02d}", {"dots": 0b0101}),
+                    ("year", f"{year:04d}", {}),
+                ]
+
+                for name, text, kwargs in updates:
+                    display = self.displays.get(name)
+                    if display:
+                        display.print_text(text, **kwargs)
 
                 if second % 5 == 0:
                     self.set_status_display()
