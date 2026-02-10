@@ -95,7 +95,7 @@ class Display(HT16K33Segment):
         """
         return self.name
 
-    def print_text(self, text: str, colon: bool = False, dots: list = []) -> None:
+    def print_text(self, text: str, colon: bool = False, dots: int = 0) -> None:
         """
         Print text to the display.
         The display can show up to 4 characters; excess characters are ignored.
@@ -104,13 +104,16 @@ class Display(HT16K33Segment):
         :type text: str
         :param colon: Whether to display the colon
         :type colon: bool
-        :param dots: List of positions to display dots
-        :type dots: list
+        :param dots: 4-bit binary number (0b0000-0b1111) defining dot states
+                 Bit order is left-to-right: bit 3 -> position 0, bit 0 -> position 3
+        :type dots: int
         """
         text = str(text)
+        dot_mask = dots & 0x0F
         self.clear()
         for i in range(min(4, len(text))):
-            self.print_character(text[i], i, has_dot=(dots is not None and i in dots))
+            has_dot = ((dot_mask >> (3 - i)) & 0x01) == 1
+            self.print_character(text[i], i, has_dot=has_dot)
         self.set_colon(colon)
         self.draw()
 
