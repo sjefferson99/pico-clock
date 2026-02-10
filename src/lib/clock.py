@@ -1,7 +1,7 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, SDA_PIN, SCL_PIN, I2C_FREQ
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ
 from asyncio import sleep_ms, create_task, get_event_loop
 from lib.display import Display
 from lib.time_source import TimeSource
@@ -17,7 +17,7 @@ class Clock:
         self.version = "0.0.1"
         self.log.info("Setting CPU frequency to: " + str(CLOCK_FREQUENCY / 1000000) + "MHz")
         freq(CLOCK_FREQUENCY)
-        self.i2c = I2C(0, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
+        self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.displays = {}
         self.tests_running = []        
         self.wifi = WirelessNetwork()
@@ -84,18 +84,20 @@ class Clock:
                 await sleep_ms(100)
                 continue
             
-            if self.time_source.get_time() != self.last_time:
-                self.log.info(f"Time now is {self.time_source.get_time()}")
-                hour, minute, second = self.time_source.get_time()[3:6]
+            now_time = self.time_source.get_time()
+            if now_time != self.last_time:
+                self.log.info(f"Time now is {now_time}")
+                hour, minute, second = now_time[3:6]
                 time_string = f"{hour:02d}{minute:02d}{second:02d}"
                 self.log.info(f"Updating display to: {time_string}")
                 for i in range(4):
                     self.displays["hour_minute"].set_character(time_string[i], i)
                 self.render_seconds_colon(int(second))
                 self.displays["hour_minute"].draw()
-                self.last_time = self.time_source.get_time()
-
-                self.set_status_display()
+                self.last_time = now_time
+                
+                if second % 5 == 0:
+                    self.set_status_display()
 
             await sleep_ms(1)
     
