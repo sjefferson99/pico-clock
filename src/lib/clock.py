@@ -1,3 +1,5 @@
+import time
+
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
@@ -125,8 +127,8 @@ class Clock:
                 self.last_time = now_time
                 
                 year, month, day, hour, minute, second = utc_tuple = now_time[0:6]
-
-                self.log.info(str(self.timezone.utc_time_tuple_to_local_time(utc_tuple)))
+                epoch = time.mktime(utc_tuple + (0, 0))
+                self.log.info(str(self.timezone.epoch_to_local_time_iso8601(epoch)))
                 
                 colon = self.should_render_seconds_colon(int(second))
                 updates = [

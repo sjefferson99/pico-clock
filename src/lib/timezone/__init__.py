@@ -31,15 +31,19 @@ class Timezone:
         self.log.info(f"Timezone set to {self.timezone}")
         self.log.info(f"POSIX timezone string: {self.posix_str}")
 
-    def utc_time_tuple_to_local_time(self, utc_time_tuple: tuple) -> tuple:
+    def epoch_to_local_time(self, epoch: float) -> tuple:
         """
-        Convert a UTC time tuple to a local time tuple based on the configured timezone.
-        utc_time_tuple: A tuple with values: year, month, day, hours, minutes, seconds.
+        Convert epoch time to local time tuple
         """
-        mktime_tuple = utc_time_tuple + (0, 0)
-        epoch_time = int(time.mktime(mktime_tuple))
-        local_time = localPZtime.tztime(epoch_time, self.posix_str)
+        local_time = localPZtime.tztime(epoch, self.posix_str)
         return local_time[:6]
+
+    def epoch_to_local_time_iso8601(self, epoch: float) -> str:
+        """
+        Convert epoch time to ISO8601 formatted local time string
+        """
+        local_time = localPZtime.tziso(epoch, self.posix_str)
+        return local_time
 
 
 
