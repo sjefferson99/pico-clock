@@ -6,6 +6,7 @@ from asyncio import sleep_ms, create_task, get_event_loop, Event
 from lib.display import Display
 from lib.time_source import TimeSource
 from lib.button import Button
+from time import ticks_us, ticks_diff
 
 class Clock:
     
@@ -20,7 +21,7 @@ class Clock:
         freq(CLOCK_FREQUENCY)
         self.i2c = I2C(I2C_ID, sda = SDA_PIN, scl = SCL_PIN, freq = I2C_FREQ)
         self.displays = {}
-        self.tests_running = []        
+        self.tests_running = []
         self.wifi = WirelessNetwork()
         self.time_source = TimeSource(self.wifi, self.i2c)
         self.brightness_button_event = Event()
@@ -110,17 +111,28 @@ class Clock:
         """
         self.log.info("Entering clock loop")
         self.last_time = self.time_source.get_time()
-
+        last_hundredths_update = ticks_us()
+        hundredths = 0
+        
         while True:
-            
             if not self.clock_loop_should_run():
                 await sleep_ms(100)
                 continue
             
+            if ticks_diff(ticks_us(), last_hundredths_update) >= 10000:
+                last_hundredths_update = ticks_us()
+                hundredths = (hundredths + 1) % 100
+                display = self.displays.get("seconds")
+                if display:
+                    display.print_text(f"{self.last_time[5]:02d}{hundredths:02d}", dots=0b0100)
+
             now_time = self.time_source.get_time()
             if now_time != self.last_time:
                 self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
                 self.last_time = now_time
+                
+                self.log.info(f"Resetting hundredths counter due to time change, it got to: {hundredths}")
+                hundredths = 0
                 
                 year, month, day, hour, minute, second = now_time[0:6]
                 
