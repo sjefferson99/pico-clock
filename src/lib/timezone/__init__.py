@@ -7,7 +7,7 @@ from lib.ulogging import uLogger
 DEFAULT_TIMEZONE = "Etc/UTC"
 
 class Timezone:
-    def __init__(self, timezone: str | None = None) -> None:
+    def __init__(self, timezone: str = DEFAULT_TIMEZONE) -> None:
         self.timezone = timezone
         self.posix_str = None
 
@@ -16,10 +16,6 @@ class Timezone:
         self._setup()
 
     def _setup(self):
-        if self.timezone is None:
-            self.log.warn("No timezone specified, using default")
-            self.timezone = DEFAULT_TIMEZONE
-
         self.log.info(f"Configuring timezone to {self.timezone}")
         self.posix_str = timezone_to_posix(self.timezone)
 
