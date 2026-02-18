@@ -31,17 +31,26 @@ class Timezone:
         self.log.info(f"Timezone set to {self.timezone}")
         self.log.info(f"POSIX timezone string: {self.posix_str}")
 
-    def epoch_to_local_time(self, epoch: float) -> tuple:
+    def time_tuple_to_local_time(self, time_tuple: tuple) -> tuple:
         """
-        Convert epoch time to local time tuple
+        Convert time tuple to local time tuple
         """
+
+        # Pad time_tuple with 0s up to 8 elements
+        padded_time_tuple = time_tuple + (0,) * (8 - len(time_tuple))
+
+        epoch = time.mktime(padded_time_tuple)
         local_time = localPZtime.tztime(epoch, self.posix_str)
         return local_time[:6]
 
-    def epoch_to_local_time_iso8601(self, epoch: float) -> str:
+    def epoch_to_local_time_iso8601(self, time_tuple: tuple) -> str:
         """
-        Convert epoch time to ISO8601 formatted local time string
+        Convert time tuple to ISO8601 formatted local time string
         """
+        # Pad time_tuple with 0s up to 8 elements
+        padded_time_tuple = time_tuple + (0,) * (8 - len(time_tuple))
+
+        epoch = time.mktime(padded_time_tuple)
         local_time = localPZtime.tziso(epoch, self.posix_str)
         return local_time
 

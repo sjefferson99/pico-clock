@@ -32,6 +32,8 @@ class Clock:
             self.brightness_button = Button(BRIGHTNESS_BUTTON, "Brightness", self.brightness_button_event)
         else:
             self.brightness_button = None
+
+        self.last_time = None
     
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -126,9 +128,8 @@ class Clock:
                 self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
                 self.last_time = now_time
                 
-                year, month, day, hour, minute, second = utc_tuple = now_time[0:6]
-                epoch = time.mktime(utc_tuple + (0, 0))
-                self.log.info(str(self.timezone.epoch_to_local_time_iso8601(epoch)))
+                local_now_time = self.timezone.time_tuple_to_local_time(now_time)
+                year, month, day, hour, minute, second = local_now_time
                 
                 colon = self.should_render_seconds_colon(int(second))
                 updates = [
