@@ -17,7 +17,7 @@ WIFI_RETRY_BACKOFF_SECONDS = 5
 CUSTOM_HOSTNAME = "Pico-Clock"
 
 ## Timezone in IANA format
-TIMEZONE = "ETC/UTC"
+TIMEZONE = "Etc/UTC"
 
 ## NTP poll frequency - Minimum period is every 60 seconds to avoid NTP server blacklisting
 NTP_SYNC_INTERVAL_SECONDS = 60
