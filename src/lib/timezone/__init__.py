@@ -1,7 +1,7 @@
 import time
 
 from lib.timezone import localPZtime
-from lib.timezone.db import TIMEZONE_TO_POSIX, timezone_to_posix
+from lib.timezone.db import timezone_to_posix
 from lib.ulogging import uLogger
 
 DEFAULT_TIMEZONE = "Etc/UTC"
@@ -39,7 +39,7 @@ class Timezone:
         local_time = localPZtime.tztime(epoch, self.posix_str)
         return local_time[:6]
 
-    def epoch_to_local_time_iso8601(self, time_tuple: tuple) -> str:
+    def time_tuple_to_local_time_iso8601(self, time_tuple: tuple) -> str:
         """
         Convert time tuple to ISO8601 formatted local time string
         """

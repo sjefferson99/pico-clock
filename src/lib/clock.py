@@ -1,5 +1,3 @@
-import time
-
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
@@ -127,7 +125,7 @@ class Clock:
             if now_time != self.last_time:
                 self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
                 self.last_time = now_time
-                
+
                 local_now_time = self.timezone.time_tuple_to_local_time(now_time)
                 year, month, day, hour, minute, second = local_now_time
                 
