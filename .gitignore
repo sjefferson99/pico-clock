@@ -1,3 +1,7 @@
 .micropico
 .vscode
 .github/instructions/snyk_rules.instructions.md
+.venv
+.idea/
+pyproject.toml
+uv.lock

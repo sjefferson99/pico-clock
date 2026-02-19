@@ -1,11 +1,12 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON, TIMEZONE
 from asyncio import sleep_ms, create_task, get_event_loop, Event
 from lib.display import Display
 from lib.time_source import TimeSource
 from lib.button import Button
+from lib.timezone import Timezone
 
 class Clock:
     
@@ -22,12 +23,15 @@ class Clock:
         self.displays = {}
         self.tests_running = []        
         self.wifi = WirelessNetwork()
+        self.timezone = Timezone(TIMEZONE)
         self.time_source = TimeSource(self.wifi, self.i2c)
         self.brightness_button_event = Event()
         if BRIGHTNESS_BUTTON is not None:
             self.brightness_button = Button(BRIGHTNESS_BUTTON, "Brightness", self.brightness_button_event)
         else:
             self.brightness_button = None
+
+        self.last_time = None
     
     def startup(self) -> None:
         self.log.info("Starting Pico Clock")
@@ -121,8 +125,9 @@ class Clock:
             if now_time != self.last_time:
                 self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
                 self.last_time = now_time
-                
-                year, month, day, hour, minute, second = now_time[0:6]
+
+                local_now_time = self.timezone.time_tuple_to_local_time(now_time)
+                year, month, day, hour, minute, second = local_now_time
                 
                 colon = self.should_render_seconds_colon(int(second))
                 updates = [
