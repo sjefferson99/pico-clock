@@ -100,7 +100,10 @@ class Clock:
             self.brightness_button_event.clear()
 
             for display in self.displays.values():
-                display.toggle_brightness()
+                try:
+                    display.toggle_brightness()
+                except Exception as e:
+                    self.log.error(f"Failed to toggle brightness for display '{display.get_name()}': {e}")
             
             await sleep_ms(20)
     
@@ -135,7 +138,10 @@ class Clock:
                 for name, text, kwargs in updates:
                     display = self.displays.get(name)
                     if display:
-                        display.print_text(text, **kwargs)
+                        try:
+                            display.print_text(text, **kwargs)
+                        except Exception as e:
+                            self.log.error(f"Failed to update display '{name}': {e}")
 
                 if second % 5 == 0:
                     self.set_status_display()
@@ -172,7 +178,13 @@ class Clock:
 
         if current_method:
             self.log.info(f"Time synchronised via {current_method}, updating status display")
-            self.displays["status"].print_text(current_method)
+            try:
+                self.displays["status"].print_text(current_method)
+            except Exception as e:
+                self.log.error(f"Failed to update status display: {e}")
         else:
             self.log.info("No time synchronisation method active, updating status display to NONE")
-            self.displays["status"].print_text("NONE")
+            try:
+                self.displays["status"].print_text("NONE")
+            except Exception as e:
+                self.log.error(f"Failed to update status display: {e}")

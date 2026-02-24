@@ -110,6 +110,9 @@ class Display(HT16K33Segment):
                  Bit order is left-to-right: bit 3 -> position 0, bit 0 -> position 3
         :type dots: int
         """
+        if self.brightness_state == 0:
+            return
+
         text = str(text)
         dot_mask = dots & 0x0F
         self.clear()
