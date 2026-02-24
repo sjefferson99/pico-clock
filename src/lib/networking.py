@@ -1,4 +1,4 @@
-from utime import ticks_ms, gmtime, time
+from utime import ticks_ms, ticks_diff, gmtime, time
 from math import ceil
 import rp2
 import network
@@ -51,6 +51,7 @@ class WirelessNetwork:
         self.ntp_sync_status = False
         self.prtc_sync_status = False
         self.network_check_in_progress = False
+        self.ntp_sync_in_progress = False
         self.ntp_address = None
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
@@ -141,6 +142,17 @@ class WirelessNetwork:
         if elapsed_ms > 5000:
             self.log.warn(f"took {elapsed_ms} milliseconds to connect to wifi")
 
+    def has_valid_network_config(self) -> bool:
+        ip, _, _, dns = self.wlan.ifconfig()
+        return ip not in ("0.0.0.0", "Unknown") and dns not in ("0.0.0.0", "Unknown")
+
+    async def wait_for_dhcp(self, *, timeout=config.WIFI_CONNECT_TIMEOUT_SECONDS, tick_sleep=0.5) -> bool:
+        for unused in range(ceil(timeout / tick_sleep)):
+            if self.has_valid_network_config():
+                return True
+            await sleep(tick_sleep)
+        return False
+
     async def auth_error(self) -> None:
         self.log.info("Bad wifi credentials")
         await self.status_led.async_flash(2, 2)
@@ -159,6 +171,8 @@ class WirelessNetwork:
         self.wlan.connect(self.wifi_ssid, self.wifi_password)
         try:
             await self.wait_status(self.CYW43_LINK_UP)
+            if not await self.wait_for_dhcp():
+                raise Exception("Connected to wifi but DHCP/IP config not ready")
         except ValueError as ve:
             self.log.error(f"Authentication failed connecting to SSID {self.wifi_ssid}: {ve}")
             await self.auth_error()
@@ -180,7 +194,7 @@ class WirelessNetwork:
         except Exception as e:
             raise Exception(f"Failed to connect to network: {e}")
 
-        elapsed_ms = ticks_ms() - start_ms
+        elapsed_ms = ticks_diff(ticks_ms(), start_ms)
         self.generate_connection_info(elapsed_ms)
 
     def get_status(self) -> int:
@@ -205,7 +219,7 @@ class WirelessNetwork:
         try:
             self.log.info("Checking for network access")
             retries = 0
-            while self.get_status() != 3 and retries <= config.WIFI_CONNECT_RETRIES:
+            while (self.get_status() != 3 or not self.has_valid_network_config()) and retries <= config.WIFI_CONNECT_RETRIES:
                 try:
                     await self.connect_wifi()
                     return True
@@ -220,11 +234,11 @@ class WirelessNetwork:
                         break
                     await self.network_retry_backoff()
 
-            if self.get_status() == 3:
+            if self.get_status() == 3 and self.has_valid_network_config():
                 self.log.info("Connected to wireless network")
                 return True
             else:
-                self.log.warn("Unable to connect to wireless network")
+                self.log.warn("Unable to connect to wireless network with valid DHCP config")
                 return False
         finally:
             self.network_check_in_progress = False
@@ -254,11 +268,17 @@ class WirelessNetwork:
         self.log.info("Starting network monitor")
         while True:
             if self.check_ntp_sync_needed():
-                self.log.info("Performing NTP sync from network monitor")
-                await self.async_sync_rtc_from_ntp()
+                if not self.ntp_sync_in_progress:
+                    self.log.info("Scheduling NTP sync from network monitor")
+                    create_task(self.async_sync_rtc_from_ntp())
+                else:
+                    self.log.info("NTP sync already in progress")
             else:
                 self.log.info("NTP in sync, now ensuring network access")
-                await self.check_network_access()
+                if not self.network_check_in_progress:
+                    create_task(self.check_network_access())
+                else:
+                    self.log.info("Network access check already in progress")
             await sleep(5)
     
     def get_mac(self) -> str:
@@ -298,6 +318,11 @@ class WirelessNetwork:
             gc.collect()
             query = bytearray(buf_size)
             query[0] = ntp_request_id
+
+            if not self.has_valid_network_config():
+                self.log.warn("NTP skipped: network lacks DHCP IP/DNS configuration")
+                return None
+
             if self.ntp_address is None:
                 self.ntp_address = getaddrinfo(ntp_host, port)[0][-1]
             address = self.ntp_address
@@ -308,7 +333,7 @@ class WirelessNetwork:
    
             timeout_ms = 5000
             start_time = ticks_ms()
-            while (ticks_ms() - start_time) < timeout_ms:
+            while ticks_diff(ticks_ms(), start_time) < timeout_ms:
                 try:
                     data, _ = udp_socket.recvfrom(buf_size)
 
@@ -339,6 +364,11 @@ class WirelessNetwork:
 
     async def async_sync_rtc_from_ntp(self) -> bool:
         result = False
+        if self.ntp_sync_in_progress:
+            self.log.info("NTP sync already in progress, skipping")
+            return False
+
+        self.ntp_sync_in_progress = True
         try:
             if await self.check_network_access():
                 timestamp = await self.async_get_timestamp_from_ntp()
@@ -371,6 +401,8 @@ class WirelessNetwork:
         except Exception as e:
             self.ntp_sync_status = False
             self.log.error(f"Failed to sync RTC from NTP: {e}")
+        finally:
+            self.ntp_sync_in_progress = False
         return result
     
     def is_connected(self) -> bool:
