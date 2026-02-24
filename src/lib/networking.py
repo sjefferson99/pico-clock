@@ -56,6 +56,7 @@ class WirelessNetwork:
         self.ntp_port = 123
         self.ntp_server_index = 0
         self.ntp_address = (self.ntp_servers[self.ntp_server_index], self.ntp_port)
+        self.last_network_state = None
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
             self.log.warn("NTP sync interval too low, setting to minimum of 60 seconds")
@@ -137,13 +138,14 @@ class WirelessNetwork:
                 raise Exception(f"Failed to disconnect: {x}")
         self.log.info("Ready for connection!")
     
-    def generate_connection_info(self, elapsed_ms) -> None:
+    def generate_connection_info(self, elapsed_ms=None) -> None:
         self.ip, self.subnet, self.gateway, self.dns = self.wlan.ifconfig()
         self.log.info(f"IP: {self.ip}, Subnet: {self.subnet}, Gateway: {self.gateway}, DNS: {self.dns}")
-        
-        self.log.info(f"Elapsed: {elapsed_ms}ms")
-        if elapsed_ms > 5000:
-            self.log.warn(f"took {elapsed_ms} milliseconds to connect to wifi")
+
+        if elapsed_ms is not None:
+            self.log.info(f"Elapsed: {elapsed_ms}ms")
+            if elapsed_ms > 5000:
+                self.log.warn(f"took {elapsed_ms} milliseconds to connect to wifi")
 
     def has_valid_network_config(self) -> bool:
         ip, _, _, dns = self.wlan.ifconfig()
@@ -270,7 +272,21 @@ class WirelessNetwork:
     async def network_monitor(self) -> None:
         self.log.info("Starting network monitor")
         while True:
-            if (self.get_status() != self.CYW43_LINK_UP or not self.has_valid_network_config()):
+            status = self.get_status()
+            config_valid = self.has_valid_network_config()
+
+            network_state = (status, config_valid)
+            if network_state != self.last_network_state:
+                self.last_network_state = network_state
+                status_desc = self.status_names.get(status, "Unknown status")
+                if status == self.CYW43_LINK_UP and config_valid:
+                    self.generate_connection_info()
+                    self.log.info("WiFi connected with valid DHCP configuration")
+                    self.log.info(f"WiFi status transition: {status} ({status_desc})")
+                else:
+                    self.log.warn(f"WiFi not ready: status {status} ({status_desc}), dhcp_valid={config_valid}")
+
+            if (status != self.CYW43_LINK_UP or not config_valid):
                 if not self.network_check_in_progress:
                     self.log.info("Network not ready, scheduling connectivity check")
                     create_task(self.check_network_access())
