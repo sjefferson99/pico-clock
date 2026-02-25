@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class Display(HT16K33Segment):
 
-    def __init__(self, i2c: I2C, name: str, address: int, tests_running: list) -> None:
+    def __init__(self, i2c: I2C, name: str, address: int) -> None:
         """
         Display class extends HT16K33Segment to manage individual 7-segment
         displays, provides methods for initialization and running display tests.
@@ -24,20 +24,18 @@ class Display(HT16K33Segment):
         :type name: str
         :param address: I2C address of the display
         :type address: int
-        :param tests_running: Semaphore list to track running display tests
-        :type tests_running: list
         """
         super().__init__(i2c, i2c_address=address)
         self.log = uLogger(f"Init display-0x{address:02X}: {name}")
         self.name = name
         self.brightness_state = 1
+        self.clock_core = None  # Will be set after ClockCore is initialized
         self.power_on()
         self.set_brightness(DISPLAY_BRIGHTNESS)
         self.set_blink_rate(0)
         self.set_colon(False)
         self.clear()
         self.draw()
-        self.tests_running = tests_running
         self.load_glyphs()
 
     def load_glyphs(self) -> None:
@@ -62,13 +60,23 @@ class Display(HT16K33Segment):
             'T': 0b01111000            
         }
     
+    def set_clock_core(self, clock_core) -> None:
+        """
+        Set the ClockCore instance for test registration.
+        
+        :param clock_core: ClockCore instance
+        :type clock_core: ClockCore
+        """
+        self.clock_core = clock_core
+    
     async def async_display_test(self) -> None:
         """
         Run a display test on a given display.
         """
         try:
             self.log.info(f"Running display test on {self.name}")
-            self.tests_running.append(self)
+            if self.clock_core:
+                self.clock_core.register_test(self.name)
             colon_dot = False
 
             for output in '0123456789ABCDEF':
@@ -86,7 +94,8 @@ class Display(HT16K33Segment):
             self.clear()
             self.draw()
             self.log.info(f"Display test completed on {self.name}")
-            self.tests_running.remove(self)
+            if self.clock_core:
+                self.clock_core.unregister_test(self.name)
     
     def get_name(self) -> str:
         """
