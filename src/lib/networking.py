@@ -1,4 +1,4 @@
-from utime import ticks_ms, gmtime, time
+from utime import ticks_ms, ticks_diff, gmtime, time
 from math import ceil
 import rp2
 import network
@@ -8,8 +8,9 @@ from lib.ulogging import uLogger
 from lib.utils import StatusLED
 from asyncio import sleep, create_task
 from machine import RTC
-from socket import getaddrinfo, socket, AF_INET, SOCK_DGRAM
+from socket import socket, AF_INET, SOCK_DGRAM, getaddrinfo
 import struct
+import gc
 
 class WirelessNetwork:
 
@@ -50,6 +51,13 @@ class WirelessNetwork:
         self.ntp_sync_status = False
         self.prtc_sync_status = False
         self.network_check_in_progress = False
+        self.ntp_sync_in_progress = False
+        self.ntp_host = "uk.pool.ntp.org"
+        self.ntp_servers = []
+        self.ntp_port = 123
+        self.ntp_server_index = 0
+        self.ntp_address = None
+        self.last_network_state = None
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
             self.log.warn("NTP sync interval too low, setting to minimum of 60 seconds")
@@ -58,6 +66,39 @@ class WirelessNetwork:
             self.NTP_SYNC_INTERVAL_SECONDS = config.NTP_SYNC_INTERVAL_SECONDS
 
         self.configure_wifi()
+        self.refresh_ntp_servers()
+
+    def refresh_ntp_servers(self) -> bool:
+        """
+        Resolve and cache NTP server IP addresses from configured hostname.
+
+        Returns:
+            bool: True when at least one IPv4 address is resolved, else False.
+        """
+        if not self.has_valid_network_config():
+            self.log.warn("NTP DNS refresh skipped: network lacks DHCP IP/DNS configuration")
+            return False
+
+        try:
+            addrinfo = getaddrinfo(self.ntp_host, self.ntp_port, AF_INET, SOCK_DGRAM)
+            resolved_servers = []
+            for entry in addrinfo:
+                ip_address = entry[-1][0]
+                if ip_address not in resolved_servers:
+                    resolved_servers.append(ip_address)
+
+            if not resolved_servers:
+                self.log.error(f"NTP DNS lookup returned no IPv4 addresses for {self.ntp_host}")
+                return False
+
+            self.ntp_servers = resolved_servers
+            self.ntp_server_index = 0
+            self.ntp_address = (self.ntp_servers[0], self.ntp_port)
+            self.log.info(f"Resolved NTP host {self.ntp_host} to {self.ntp_servers}")
+            return True
+        except Exception as e:
+            self.log.error(f"NTP DNS lookup failed for {self.ntp_host}: {e}")
+            return False
 
     def configure_wifi(self) -> None:
         self.wlan = network.WLAN(network.STA_IF)
@@ -131,13 +172,25 @@ class WirelessNetwork:
                 raise Exception(f"Failed to disconnect: {x}")
         self.log.info("Ready for connection!")
     
-    def generate_connection_info(self, elapsed_ms) -> None:
+    def generate_connection_info(self, elapsed_ms=None) -> None:
         self.ip, self.subnet, self.gateway, self.dns = self.wlan.ifconfig()
         self.log.info(f"IP: {self.ip}, Subnet: {self.subnet}, Gateway: {self.gateway}, DNS: {self.dns}")
-        
-        self.log.info(f"Elapsed: {elapsed_ms}ms")
-        if elapsed_ms > 5000:
-            self.log.warn(f"took {elapsed_ms} milliseconds to connect to wifi")
+
+        if elapsed_ms is not None:
+            self.log.info(f"Elapsed: {elapsed_ms}ms")
+            if elapsed_ms > 5000:
+                self.log.warn(f"took {elapsed_ms} milliseconds to connect to wifi")
+
+    def has_valid_network_config(self) -> bool:
+        ip, _, _, dns = self.wlan.ifconfig()
+        return ip not in ("0.0.0.0", "Unknown") and dns not in ("0.0.0.0", "Unknown")
+
+    async def wait_for_dhcp(self, *, timeout=config.WIFI_CONNECT_TIMEOUT_SECONDS, tick_sleep=0.5) -> bool:
+        for unused in range(ceil(timeout / tick_sleep)):
+            if self.has_valid_network_config():
+                return True
+            await sleep(tick_sleep)
+        return False
 
     async def auth_error(self) -> None:
         self.log.info("Bad wifi credentials")
@@ -157,6 +210,8 @@ class WirelessNetwork:
         self.wlan.connect(self.wifi_ssid, self.wifi_password)
         try:
             await self.wait_status(self.CYW43_LINK_UP)
+            if not await self.wait_for_dhcp():
+                raise Exception("Connected to wifi but DHCP/IP config not ready")
         except ValueError as ve:
             self.log.error(f"Authentication failed connecting to SSID {self.wifi_ssid}: {ve}")
             await self.auth_error()
@@ -178,8 +233,10 @@ class WirelessNetwork:
         except Exception as e:
             raise Exception(f"Failed to connect to network: {e}")
 
-        elapsed_ms = ticks_ms() - start_ms
+        elapsed_ms = ticks_diff(ticks_ms(), start_ms)
         self.generate_connection_info(elapsed_ms)
+        if not self.ntp_servers:
+            self.refresh_ntp_servers()
 
     def get_status(self) -> int:
         return self.wlan.status()
@@ -203,7 +260,7 @@ class WirelessNetwork:
         try:
             self.log.info("Checking for network access")
             retries = 0
-            while self.get_status() != 3 and retries <= config.WIFI_CONNECT_RETRIES:
+            while (self.get_status() != 3 or not self.has_valid_network_config()) and retries <= config.WIFI_CONNECT_RETRIES:
                 try:
                     await self.connect_wifi()
                     return True
@@ -218,11 +275,11 @@ class WirelessNetwork:
                         break
                     await self.network_retry_backoff()
 
-            if self.get_status() == 3:
+            if self.get_status() == 3 and self.has_valid_network_config():
                 self.log.info("Connected to wireless network")
                 return True
             else:
-                self.log.warn("Unable to connect to wireless network")
+                self.log.warn("Unable to connect to wireless network with valid DHCP config")
                 return False
         finally:
             self.network_check_in_progress = False
@@ -251,12 +308,33 @@ class WirelessNetwork:
     async def network_monitor(self) -> None:
         self.log.info("Starting network monitor")
         while True:
+            status = self.get_status()
+            config_valid = self.has_valid_network_config()
+
+            network_state = (status, config_valid)
+            if network_state != self.last_network_state:
+                self.last_network_state = network_state
+                status_desc = self.status_names.get(status, "Unknown status")
+                if status == self.CYW43_LINK_UP and config_valid:
+                    self.generate_connection_info()
+                    self.log.info("WiFi connected with valid DHCP configuration")
+                    self.log.info(f"WiFi status transition: {status} ({status_desc})")
+                else:
+                    self.log.warn(f"WiFi not ready: status {status} ({status_desc}), dhcp_valid={config_valid}")
+
+            if (status != self.CYW43_LINK_UP or not config_valid):
+                if not self.network_check_in_progress:
+                    self.log.info("Network not ready, scheduling connectivity check")
+                    create_task(self.check_network_access())
+                else:
+                    self.log.info("Network access check already in progress")
+
             if self.check_ntp_sync_needed():
-                self.log.info("Performing NTP sync from network monitor")
-                await self.async_sync_rtc_from_ntp()
-            else:
-                self.log.info("NTP in sync, now ensuring network access")
-                await self.check_network_access()
+                if not self.ntp_sync_in_progress:
+                    self.log.info("Scheduling NTP sync from network monitor")
+                    create_task(self.async_sync_rtc_from_ntp())
+                else:
+                    self.log.info("NTP sync already in progress")
             await sleep(5)
     
     def get_mac(self) -> str:
@@ -284,70 +362,128 @@ class WirelessNetwork:
     def get_hostname(self) -> str:
         return self.hostname
     
-    async def async_get_timestamp_from_ntp(self) -> tuple:
-        ntp_host = "pool.ntp.org"
-        port = 123
+    async def async_get_timestamp_from_ntp(self, allow_dns_refresh_retry=True):
         buf_size = 48
         ntp_request_id = 0x1b
-        timestamp = (2000, 1, 1, 0, 0, 0, 0, 0)
 
-        try:
-            query = bytearray(buf_size)
-            query[0] = ntp_request_id
-            address = getaddrinfo(ntp_host, port)[0][-1]
-            udp_socket = socket(AF_INET, SOCK_DGRAM)
-            udp_socket.setblocking(False)
-            
-            socket.sendto(udp_socket, query, address)
-   
-            timeout_ms = 5000
-            start_time = ticks_ms()
-            while (ticks_ms() - start_time) < timeout_ms:
-                try:
-                    data, _ = udp_socket.recvfrom(buf_size)
-                    udp_socket.close()
-                    
-                    local_epoch = 2208988800
-                    timestamp = struct.unpack("!I", data[40:44])[0] - local_epoch
-                    timestamp = gmtime(timestamp)
-                    break
-                except OSError:
-                    await sleep(0.1)
+        gc.collect()
+        query = bytearray(buf_size)
+        query[0] = ntp_request_id
 
-        except Exception as e:
-            self.log.error(f"Failed to get NTP time: {e}")
+        if not self.has_valid_network_config():
+            self.log.warn("NTP skipped: network lacks DHCP IP/DNS configuration")
+            return None
 
-        return timestamp
+        if not self.ntp_servers and not self.refresh_ntp_servers():
+            return None
+
+        server_count = len(self.ntp_servers)
+        if server_count == 0:
+            self.log.error("No NTP servers available after DNS resolution")
+            return None
+
+        for attempt in range(server_count):
+            server_index = (self.ntp_server_index + attempt) % server_count
+            ntp_host = self.ntp_servers[server_index]
+            timestamp = None
+            udp_socket = None
+
+            try:
+                udp_socket = socket(AF_INET, SOCK_DGRAM)
+                udp_socket.setblocking(False)
+                udp_socket.sendto(query, (ntp_host, self.ntp_port))
+
+                timeout_ms = 5000
+                start_time = ticks_ms()
+                while ticks_diff(ticks_ms(), start_time) < timeout_ms:
+                    try:
+                        data, _ = udp_socket.recvfrom(buf_size)
+
+                        local_epoch = 2208988800
+                        timestamp = struct.unpack("!I", data[40:44])[0] - local_epoch
+                        timestamp = gmtime(timestamp)
+                        break
+                    except OSError:
+                        await sleep(0.1)
+
+                if timestamp is not None:
+                    self.ntp_server_index = server_index
+                    self.ntp_address = (ntp_host, self.ntp_port)
+                    if attempt > 0:
+                        self.log.info(f"NTP fallback succeeded using {ntp_host}")
+                    return timestamp
+
+                self.log.warn(f"No NTP response from {ntp_host} within timeout")
+            except OSError as e:
+                if e.args and e.args[0] == 12:
+                    gc.collect()
+                self.log.error(f"Failed to get NTP time from {ntp_host}: {e}")
+            except Exception as e:
+                self.log.error(f"Failed to get NTP time from {ntp_host}: {e}")
+            finally:
+                if udp_socket:
+                    try:
+                        udp_socket.close()
+                    except Exception:
+                        pass
+
+                gc.collect()
+
+            if attempt < (server_count - 1):
+                next_host = self.ntp_servers[(server_index + 1) % server_count]
+                self.log.warn(f"Trying fallback NTP server {next_host}")
+
+        if allow_dns_refresh_retry:
+            self.log.warn("All cached NTP servers failed, refreshing DNS and retrying once")
+            if self.refresh_ntp_servers():
+                return await self.async_get_timestamp_from_ntp(allow_dns_refresh_retry=False)
+
+        return None
 
     async def async_sync_rtc_from_ntp(self) -> bool:
         result = False
-        try:
-            if await self.check_network_access():
-                timestamp = await self.async_get_timestamp_from_ntp()
-                self.log.info(f"NTP timestamp obtained: {timestamp}")
-                RTC().datetime((
-                    timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
-                    timestamp[3], timestamp[4], timestamp[5], 0))
-                
-                # Call time sync callback if registered
-                if self.on_time_sync:
-                    try:
-                        self.on_time_sync(timestamp)
-                    except Exception as e:
-                        self.log.error(f"Error in time sync callback: {e}")
+        if self.ntp_sync_in_progress:
+            self.log.info("NTP sync already in progress, skipping")
+            return False
 
-                self.ntp_last_synced_timestamp = time()
-                self.ntp_sync_status = True
-                self.prtc_sync_status = True
-                self.log.info("RTC synced from NTP")
-                result = True
-            else:
+        self.ntp_sync_in_progress = True
+        try:
+            if self.get_status() != self.CYW43_LINK_UP or not self.has_valid_network_config():
                 self.ntp_sync_status = False
                 self.log.error("No network access, cannot sync RTC from NTP")
-                result = False
+                if not self.network_check_in_progress:
+                    self.log.info("Scheduling connectivity check after NTP sync skip")
+                    create_task(self.check_network_access())
+                return False
+
+            timestamp = await self.async_get_timestamp_from_ntp()
+            self.log.info(f"NTP timestamp obtained: {timestamp}")
+            if timestamp is None:
+                self.ntp_sync_status = False
+                self.log.error("NTP sync failed, RTC not updated")
+                return False
+
+            RTC().datetime((
+                timestamp[0], timestamp[1], timestamp[2], timestamp[6], 
+                timestamp[3], timestamp[4], timestamp[5], 0))
+            
+            # Call time sync callback if registered
+            if self.on_time_sync:
+                try:
+                    self.on_time_sync(timestamp)
+                except Exception as e:
+                    self.log.error(f"Error in time sync callback: {e}")
+
+            self.ntp_last_synced_timestamp = time()
+            self.ntp_sync_status = True
+            self.prtc_sync_status = True
+            self.log.info("RTC synced from NTP")
+            result = True
         except Exception as e:
             self.ntp_sync_status = False
             self.log.error(f"Failed to sync RTC from NTP: {e}")
+        finally:
+            self.ntp_sync_in_progress = False
         return result
     
     def is_connected(self) -> bool:
