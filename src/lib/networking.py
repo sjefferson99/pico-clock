@@ -8,7 +8,7 @@ from lib.ulogging import uLogger
 from lib.utils import StatusLED
 from asyncio import sleep, create_task
 from machine import RTC
-from socket import socket, AF_INET, SOCK_DGRAM
+from socket import socket, AF_INET, SOCK_DGRAM, getaddrinfo
 import struct
 import gc
 
@@ -52,10 +52,11 @@ class WirelessNetwork:
         self.prtc_sync_status = False
         self.network_check_in_progress = False
         self.ntp_sync_in_progress = False
-        self.ntp_servers = ("162.159.200.1", "162.159.200.123")
+        self.ntp_host = "uk.pool.ntp.org"
+        self.ntp_servers = []
         self.ntp_port = 123
         self.ntp_server_index = 0
-        self.ntp_address = (self.ntp_servers[self.ntp_server_index], self.ntp_port)
+        self.ntp_address = None
         self.last_network_state = None
         
         if config.NTP_SYNC_INTERVAL_SECONDS < 60:
@@ -65,6 +66,39 @@ class WirelessNetwork:
             self.NTP_SYNC_INTERVAL_SECONDS = config.NTP_SYNC_INTERVAL_SECONDS
 
         self.configure_wifi()
+        self.refresh_ntp_servers()
+
+    def refresh_ntp_servers(self) -> bool:
+        """
+        Resolve and cache NTP server IP addresses from configured hostname.
+
+        Returns:
+            bool: True when at least one IPv4 address is resolved, else False.
+        """
+        if not self.has_valid_network_config():
+            self.log.warn("NTP DNS refresh skipped: network lacks DHCP IP/DNS configuration")
+            return False
+
+        try:
+            addrinfo = getaddrinfo(self.ntp_host, self.ntp_port, AF_INET, SOCK_DGRAM)
+            resolved_servers = []
+            for entry in addrinfo:
+                ip_address = entry[-1][0]
+                if ip_address not in resolved_servers:
+                    resolved_servers.append(ip_address)
+
+            if not resolved_servers:
+                self.log.error(f"NTP DNS lookup returned no IPv4 addresses for {self.ntp_host}")
+                return False
+
+            self.ntp_servers = resolved_servers
+            self.ntp_server_index = 0
+            self.ntp_address = (self.ntp_servers[0], self.ntp_port)
+            self.log.info(f"Resolved NTP host {self.ntp_host} to {self.ntp_servers}")
+            return True
+        except Exception as e:
+            self.log.error(f"NTP DNS lookup failed for {self.ntp_host}: {e}")
+            return False
 
     def configure_wifi(self) -> None:
         self.wlan = network.WLAN(network.STA_IF)
@@ -201,6 +235,8 @@ class WirelessNetwork:
 
         elapsed_ms = ticks_diff(ticks_ms(), start_ms)
         self.generate_connection_info(elapsed_ms)
+        if not self.ntp_servers:
+            self.refresh_ntp_servers()
 
     def get_status(self) -> int:
         return self.wlan.status()
@@ -326,10 +362,9 @@ class WirelessNetwork:
     def get_hostname(self) -> str:
         return self.hostname
     
-    async def async_get_timestamp_from_ntp(self):
+    async def async_get_timestamp_from_ntp(self, allow_dns_refresh_retry=True):
         buf_size = 48
         ntp_request_id = 0x1b
-        server_count = len(self.ntp_servers)
 
         gc.collect()
         query = bytearray(buf_size)
@@ -337,6 +372,14 @@ class WirelessNetwork:
 
         if not self.has_valid_network_config():
             self.log.warn("NTP skipped: network lacks DHCP IP/DNS configuration")
+            return None
+
+        if not self.ntp_servers and not self.refresh_ntp_servers():
+            return None
+
+        server_count = len(self.ntp_servers)
+        if server_count == 0:
+            self.log.error("No NTP servers available after DNS resolution")
             return None
 
         for attempt in range(server_count):
@@ -389,6 +432,11 @@ class WirelessNetwork:
             if attempt < (server_count - 1):
                 next_host = self.ntp_servers[(server_index + 1) % server_count]
                 self.log.warn(f"Trying fallback NTP server {next_host}")
+
+        if allow_dns_refresh_retry:
+            self.log.warn("All cached NTP servers failed, refreshing DNS and retrying once")
+            if self.refresh_ntp_servers():
+                return await self.async_get_timestamp_from_ntp(allow_dns_refresh_retry=False)
 
         return None
 
