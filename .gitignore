@@ -1,3 +1,4 @@
 .micropico
 .vscode
 .github/instructions/snyk_rules.instructions.md
+.idea/
