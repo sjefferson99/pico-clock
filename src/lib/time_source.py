@@ -46,6 +46,7 @@ class TimeSource():
         self.rtc = InternalRTC()
         self.external_rtc = ExternalRTC(self.i2c)
         self.external_rtc_sync_status = False
+        self.selected_time_source_name = None
         self.init_external_rtc()
         # At initialization all sync statuses are False because async_check_time_sync_status()
         # has not run yet. This initial update_time_source() intentionally relies on the
@@ -53,6 +54,14 @@ class TimeSource():
         # the async task starts updating time_sync_status, subsequent calls will promote NTP/PRTC.
         self.time_source: SpecificTimeSource = self.rtc
         self.update_time_source()
+
+    def select_time_source(self, source_name: str, source: SpecificTimeSource, message: str = "") -> None:
+        self.time_source = source
+        if self.selected_time_source_name != source_name:
+            if message:
+                self.log.info(message)
+            self.log.info(f"Selected time source: {source_name}")
+            self.selected_time_source_name = source_name
 
     def init_external_rtc(self) -> None:
         """
@@ -152,23 +161,18 @@ class TimeSource():
                 continue
             
             if source_name == "RTC":
-                self.log.info(f"Selected time source: {source_name}")
-                self.time_source = self.external_rtc
+                self.select_time_source("RTC", self.external_rtc)
                 return
             elif source_name == "PRTC":
-                self.log.info(f"Selected time source: {source_name}")
-                self.time_source = self.rtc
+                self.select_time_source("PRTC", self.rtc)
                 return
         
         # Default fallback to internal RTC
-        self.log.error("No time source available, using potentially incorrect RTC value")
         if self.external_rtc.is_configured():
-            self.log.info("Selected time source: RTC")
-            self.time_source = self.external_rtc
+            self.select_time_source("RTC", self.external_rtc, "No confirmed sync source active, falling back to external RTC")
             return
         else:
-            self.log.info("Selected time source: PRTC. No external RTC available.")
-            self.time_source = self.rtc
+            self.select_time_source("PRTC", self.rtc, "No confirmed sync source active and no external RTC, falling back to internal RTC")
             return
 
     def get_time_sync_status(self) -> list[TimeSyncStatus]:
