@@ -175,7 +175,7 @@ class TimeZone:
         self._cache_dst_end = self._dst_end_rule.get_transition(year)
 
     def _get_datetime_components(self, dt, *args):
-        if isinstance(dt, tuple | list):
+        if isinstance(dt, (tuple, list)):
             if len(dt) < 3:
                 raise ValueError(
                     "datetime tuple must have at least 3 elements (y, m, d)"
