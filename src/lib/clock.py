@@ -1,11 +1,14 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON, TIMEZONE
 from asyncio import sleep_ms, create_task, get_event_loop, Event
 from lib.display import Display
 from lib.time_source import TimeSource
 from lib.button import Button
+from lib.utimezone import TimeZone
+
+DEFAULT_TIMEZONE = "Etc/Zulu"
 
 class Clock:
     
@@ -24,6 +27,16 @@ class Clock:
         self.wifi = WirelessNetwork()
         self.time_source = TimeSource(self.wifi, self.i2c)
         self.brightness_button_event = Event()
+
+
+        try:
+            self.timezone = TimeZone(TIMEZONE)
+        except ValueError:
+            self.log.warn(f"Invalid timezone: {TIMEZONE}. Using default: {DEFAULT_TIMEZONE}")
+            self.timezone = TimeZone(DEFAULT_TIMEZONE)
+
+        self.log.info(f"Using timezone: {self.timezone}")
+
         if BRIGHTNESS_BUTTON is not None:
             self.brightness_button = Button(BRIGHTNESS_BUTTON, "Brightness", self.brightness_button_event)
         else:
@@ -119,11 +132,15 @@ class Clock:
             
             now_time = self.time_source.get_time()
             if now_time != self.last_time:
-                self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
+                self.log.info(f"Time change detected, updating displays. UTC time now: {now_time}")
                 self.last_time = now_time
                 
-                year, month, day, hour, minute, second = now_time[0:6]
-                
+                utc_time = now_time[0:6]
+                local_now_time = self.timezone.utc_datetime_to_local(utc_time)
+                year, month, day, hour, minute, second = local_now_time
+
+                self.log.info(f"Local time now: {local_now_time}")
+
                 colon = self.should_render_seconds_colon(int(second))
                 updates = [
                     ("hour_minute", f"{hour:02d}{minute:02d}", {"colon": colon}),
