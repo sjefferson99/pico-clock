@@ -1,13 +1,16 @@
 from lib.ulogging import uLogger
 from lib.networking import WirelessNetwork
 from machine import freq, I2C
-from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON
+from config import DISPLAY_ADDRESSES, CLOCK_FREQUENCY, I2C_ID, SDA_PIN, SCL_PIN, I2C_FREQ, BRIGHTNESS_BUTTON, TIMEZONE
 from asyncio import sleep_ms, create_task, get_event_loop, Event
 from lib.display import Display
 from lib.time_source import TimeSource
 from lib.button import Button
 from lib.clock_core import ClockCore
 import _thread
+from lib.utimezone import TimeZone
+
+DEFAULT_TIMEZONE = "Etc/Zulu"
 
 class Clock:
     
@@ -27,6 +30,15 @@ class Clock:
         self.time_source = TimeSource(self.wifi, self.i2c)
         self.clock_core = None  # Will be initialized after displays are set up
         self.brightness_button_event = Event()
+
+        try:
+            self.timezone = TimeZone(TIMEZONE)
+        except ValueError:
+            self.log.warn(f"Invalid timezone: {TIMEZONE}. Using default: {DEFAULT_TIMEZONE}")
+            self.timezone = TimeZone(DEFAULT_TIMEZONE)
+
+        self.log.info(f"Using timezone: {self.timezone}")
+
         if BRIGHTNESS_BUTTON is not None:
             self.brightness_button = Button(BRIGHTNESS_BUTTON, "Brightness", self.brightness_button_event)
         else:
@@ -41,7 +53,7 @@ class Clock:
 
         # Initialize and start ClockCore on Core 1 after displays are ready
         self.log.info("Initializing clock core for Core 1")
-        self.clock_core = ClockCore(self.time_source, self.displays, self.i2c_lock)
+        self.clock_core = ClockCore(self.time_source, self.timezone, self.displays, self.i2c_lock)
         
         # Connect displays to clock core for test registration
         for display in self.displays.values():

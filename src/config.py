@@ -16,6 +16,9 @@ WIFI_RETRY_BACKOFF_SECONDS = 5
 # Leave as none for MAC based unique hostname or specify a custom hostname string
 CUSTOM_HOSTNAME = "Pico-Clock"
 
+# Set your custom timezone in IANA format (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+TIMEZONE = "Etc/UTC"
+
 ## NTP poll frequency - Minimum period is every 60 seconds to avoid NTP server blacklisting
 NTP_SYNC_INTERVAL_SECONDS = 60
 

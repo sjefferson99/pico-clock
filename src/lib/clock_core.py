@@ -20,17 +20,19 @@ class ClockCore:
     on Core 0.
     """
     
-    def __init__(self, time_source, displays: dict, i2c_lock = None) -> None:
+    def __init__(self, time_source, timezone, displays: dict, i2c_lock = None) -> None:
         """
         Initialize the clock core with time source and displays.
         
         Args:
             time_source: TimeSource instance managing the best available time
+            time_zone: TimeZone instance for handling timezone conversions
             displays: Dictionary of Display objects keyed by name
             i2c_lock: Optional lock for thread-safe I2C operations
         """
         self.log = uLogger("ClockCore")
         self.time_source = time_source
+        self.timezone = timezone
         self.displays = displays
         self.running = False
         self.lock = _thread.allocate_lock()
@@ -123,10 +125,14 @@ class ClockCore:
                 
                 # Only update displays when time actually changes
                 if now_time != self.last_time:
-                    self.log.info(f"Time change detected, updating displays. Time now: {now_time}")
+                    self.log.info(f"Time change detected, updating displays. UTC Time now: {now_time}")
                     self.last_time = now_time
                     
-                    year, month, day, hour, minute, second = now_time[0:6]
+                    utc_time = now_time[0:6]
+                    local_now_time = self.timezone.utc_datetime_to_local(utc_time)
+                    year, month, day, hour, minute, second = local_now_time
+
+                    self.log.info(f"Local time now: {local_now_time}")
                     
                     # Update all displays
                     self._update_displays(year, month, day, hour, minute, second)
